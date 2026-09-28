@@ -108,7 +108,7 @@ export async function handleAdminCosting(request: Request, env: Env): Promise<Re
     const since = new Date(Date.now() - RANGE_TO_MS[range]).toISOString();
 
     const lastTransaction = await env.EDU_LIVE_DB.prepare(
-      "SELECT input_tokens, output_tokens, jev_cost_usd, llm_cost_usd, timestamp FROM transactions ORDER BY timestamp DESC LIMIT 1"
+      "SELECT model, jev_model, input_tokens, output_tokens, jev_cost_usd, llm_cost_usd, timestamp FROM transactions ORDER BY timestamp DESC LIMIT 1"
     )
       .bind()
       .first();

@@ -131,16 +131,16 @@ function renderTransactionCard(txn) {
       <div class="txn-meta">
         <strong>${escapeHtml(txn.provider)} / ${escapeHtml(txn.model)}</strong>${txn.jevModel ? ` · JEV: <strong>${escapeHtml(txn.jevModel)}</strong>` : ""}
       </div>
-      <h4>Retrieval results</h4>
+      <h4>Vector Retrieval results</h4>
       ${renderRetrievalTable(txn.retrieval)}
-      <details class="io-block"><summary>LLM input</summary><pre>${escapeHtml(txn.llmInput)}</pre></details>
-      <details class="io-block"><summary>LLM output</summary><pre>${escapeHtml(txn.llmOutput)}</pre></details>
       ${
         txn.jevInput
           ? `<details class="io-block"><summary>JEV input</summary><pre>${escapeHtml(JSON.stringify(txn.jevInput, null, 2))}</pre></details>
              <details class="io-block"><summary>JEV output</summary><pre>${escapeHtml(JSON.stringify(txn.jevOutput, null, 2))}</pre></details>`
           : ""
       }
+      <details class="io-block"><summary>LLM input</summary><pre>${escapeHtml(txn.llmInput)}</pre></details>
+      <details class="io-block"><summary>LLM output</summary><pre>${escapeHtml(txn.llmOutput)}</pre></details>
     </details>`;
 }
 
@@ -169,9 +169,11 @@ async function loadCostingTab(range = "1d") {
       ? `
         <div class="card">
           <h2>Tokens used — last transaction</h2>
+          <p class="txn-meta">LLM: <strong>${escapeHtml(lastTransaction.model)}</strong>${lastTransaction.jev_model ? ` · JEV: <strong>${escapeHtml(lastTransaction.jev_model)}</strong>` : ""}</p>
           <div class="metric-row">
             <div class="metric"><div class="label">Input tokens (est.)</div><div class="value">${lastTransaction.input_tokens}</div></div>
             <div class="metric"><div class="label">Output tokens (est.)</div><div class="value">${lastTransaction.output_tokens}</div></div>
+            <div class="metric"><div class="label">LLM cost</div><div class="value">$${lastTransaction.llm_cost_usd.toFixed(5)}</div></div>
             <div class="metric"><div class="label">JEV cost</div><div class="value">$${lastTransaction.jev_cost_usd.toFixed(5)}</div></div>
           </div>
         </div>`
@@ -188,10 +190,12 @@ async function loadCostingTab(range = "1d") {
           </select>
         </div>
         <h2>Tokens used — ${escapeHtml(range)}</h2>
+        ${lastTransaction ? `<p class="txn-meta">Most recent LLM: <strong>${escapeHtml(lastTransaction.model)}</strong>${lastTransaction.jev_model ? ` · JEV: <strong>${escapeHtml(lastTransaction.jev_model)}</strong>` : ""}</p>` : ""}
         <div class="metric-row">
           <div class="metric"><div class="label">Queries</div><div class="value">${summary?.queryCount ?? 0}</div></div>
           <div class="metric"><div class="label">Input tokens (est.)</div><div class="value">${summary?.inputTokens ?? 0}</div></div>
           <div class="metric"><div class="label">Output tokens (est.)</div><div class="value">${summary?.outputTokens ?? 0}</div></div>
+          <div class="metric"><div class="label">LLM cost</div><div class="value">$${(summary?.llmCostUsd ?? 0).toFixed(5)}</div></div>
           <div class="metric"><div class="label">JEV cost</div><div class="value">$${(summary?.jevCostUsd ?? 0).toFixed(5)}</div></div>
         </div>
       </div>`;
@@ -223,8 +227,8 @@ async function loadSettingsTab() {
           </label>
           <fieldset>
             <legend>Web search mode</legend>
-            <label><input type="radio" name="webSearchMode" value="rag_only" ${config.webSearchMode === "rag_only" ? "checked" : ""} /> RAG only</label>
-            <label><input type="radio" name="webSearchMode" value="rag_web_fallback" ${config.webSearchMode === "rag_web_fallback" ? "checked" : ""} /> RAG + web fallback</label>
+            <label class="checkbox-row"><input type="radio" name="webSearchMode" value="rag_only" ${config.webSearchMode === "rag_only" ? "checked" : ""} /> RAG only</label>
+            <label class="checkbox-row"><input type="radio" name="webSearchMode" value="rag_web_fallback" ${config.webSearchMode === "rag_web_fallback" ? "checked" : ""} /> RAG + web fallback</label>
           </fieldset>
           <label class="checkbox-row"><input type="checkbox" name="hardFailNoDocument" ${config.hardFailNoDocument ? "checked" : ""} /> Hard fail when no document found</label>
           <label class="checkbox-row"><input type="checkbox" name="jevEnabled" ${config.jevEnabled ? "checked" : ""} /> JEV relevance filtering enabled</label>

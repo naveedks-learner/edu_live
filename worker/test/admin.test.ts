@@ -305,6 +305,37 @@ describe("handleAdminCosting", () => {
     expect(body.lastTransaction).toBeNull();
   });
 
+  it("includes the LLM model and JEV model alongside token/cost figures for the last transaction", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: (sql: string) => ({
+          bind: () => ({
+            first: async () => {
+              if (sql.startsWith("SELECT model, jev_model")) {
+                return {
+                  model: "@cf/meta/llama-3.1-8b-instruct-fp8",
+                  jev_model: "~typesafe/jev-latest",
+                  input_tokens: 10,
+                  output_tokens: 5,
+                  jev_cost_usd: 0.0001,
+                  llm_cost_usd: 0,
+                  timestamp: "2026-09-28T00:00:00.000Z",
+                };
+              }
+              return { queryCount: 1, inputTokens: 10, outputTokens: 5, jevCostUsd: 0.0001, llmCostUsd: 0 };
+            },
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminCosting(new Request("https://worker.example/admin/costing"), env);
+    const body = (await response.json()) as { lastTransaction: { model: string; jev_model: string } };
+
+    expect(body.lastTransaction.model).toBe("@cf/meta/llama-3.1-8b-instruct-fp8");
+    expect(body.lastTransaction.jev_model).toBe("~typesafe/jev-latest");
+  });
+
   it("returns a JSON 500, not an uncaught exception, when D1 throws", async () => {
     const env = makeEnv({
       EDU_LIVE_DB: {
