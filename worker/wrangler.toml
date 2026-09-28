@@ -15,6 +15,11 @@ remote = true
 binding = "PDF_BUCKET"
 bucket_name = "edu-live-pdfs"
 
+[[d1_databases]]
+binding = "EDU_LIVE_DB"
+database_name = "edu-live-db"
+database_id = "84db96aa-c71e-4f39-bf14-3ae05faa9f2f"
+
 [vars]
 GUARDRAIL_ENABLED = "true"
 JEV_ENABLED = "true"

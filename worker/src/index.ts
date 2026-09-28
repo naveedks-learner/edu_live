@@ -14,6 +14,10 @@ export interface Env {
   // Shared secret required on the x-ingest-key header for POST /ingest.
   // Optional: if unset, /ingest is unauthenticated (e.g. local dev).
   INGEST_API_KEY: string;
+  EDU_LIVE_DB: D1Database;
+  // Shared secret required on the x-admin-key header for the /admin/* routes.
+  // Optional: if unset, /admin/* is unauthenticated (e.g. local dev).
+  ADMIN_API_KEY: string;
 }
 
 export default {
