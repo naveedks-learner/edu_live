@@ -21,7 +21,7 @@ export interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -31,7 +31,7 @@ export default {
       return withCors(await handleIngest(request, env));
     }
     if (request.method === "POST" && url.pathname === "/chat") {
-      return withCors(await handleChat(request, env));
+      return withCors(await handleChat(request, env, ctx));
     }
 
     return withCors(new Response("Not found", { status: 404 }));

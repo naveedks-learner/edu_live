@@ -1,8 +1,9 @@
 import type { Env } from "./index";
 import { checkQueryInScopeAndAgeAppropriate } from "./guardrailCheck";
 import { rerank, workersAiScoreFn, type RetrievedChunk } from "./rerank";
-import { callJev } from "./jev";
+import { scoreChunksWithJev, filterJevScored, type JevScoredChunk } from "./jev";
 import { webSearch, formatWebResultsAsContext } from "./webSearch";
+import { buildTransactionTrace, type TransactionTrace } from "./transactionTrace";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 // @cf/meta/llama-3.1-8b-instruct was deprecated by Cloudflare (2026-05-30);
@@ -23,7 +24,39 @@ Policy:
 - Name the source document (with page number) or web page you used.
 - Keep answers concise unless the question needs detail.`;
 
-export async function handleChat(request: Request, env: Env): Promise<Response> {
+async function recordTransaction(env: Env, trace: TransactionTrace): Promise<void> {
+  try {
+    await env.EDU_LIVE_DB.prepare(
+      `INSERT INTO transactions
+        (timestamp, question, provider, model, path_taken, confidence, retrieval_json,
+         llm_input, llm_output, jev_input_json, jev_output_json, input_tokens, output_tokens,
+         jev_cost_usd, llm_cost_usd)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        trace.timestamp,
+        trace.question,
+        trace.provider,
+        trace.model,
+        trace.pathTaken,
+        trace.confidence,
+        JSON.stringify(trace.retrieval),
+        trace.llmInput,
+        trace.llmOutput,
+        trace.jevInput ? JSON.stringify(trace.jevInput) : null,
+        trace.jevOutput ? JSON.stringify(trace.jevOutput) : null,
+        trace.inputTokens,
+        trace.outputTokens,
+        trace.jevCostUsd,
+        trace.llmCostUsd
+      )
+      .run();
+  } catch (err) {
+    console.error("failed to record transaction trace", err);
+  }
+}
+
+export async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const body = (await request.json().catch(() => null)) as { question?: string } | null;
   const question = body?.question?.trim();
 
@@ -58,14 +91,15 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 
     const reranked = await rerank(question, retrieved, workersAiScoreFn(env.AI));
 
-    const jevFiltered =
-      env.JEV_ENABLED === "true"
-        ? await callJev(question, reranked, env.OPENROUTER_API_KEY)
-        : reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }));
+    const jevEnabled = env.JEV_ENABLED === "true";
+    const jevResult = jevEnabled
+      ? await scoreChunksWithJev(question, reranked, env.OPENROUTER_API_KEY)
+      : { chunks: reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }) as JevScoredChunk), costUsd: 0 };
 
-    let docSources = jevFiltered;
+    const docSources = jevEnabled ? filterJevScored(jevResult.chunks) : jevResult.chunks;
+    const keptKeys = new Set(docSources.map((c) => `${c.source}::${c.chunkId}`));
+
     let webSources: Awaited<ReturnType<typeof webSearch>> = [];
-
     if (docSources.length === 0) {
       webSources = await webSearch(question);
     }
@@ -73,14 +107,29 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     const documentContext = docSources.map((c) => `[${c.source} p.${c.page}]\n${c.text}`).join("\n\n");
     const webContext = webSources.length > 0 ? formatWebResultsAsContext(webSources) : "";
     const context = [documentContext, webContext].filter(Boolean).join("\n\n---\n\n") || "No context found.";
+    const llmInput = `Question: ${question}\n\nContext:\n${context}`;
 
     const generateResponse = await env.AI.run(GENERATION_MODEL, {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Question: ${question}\n\nContext:\n${context}` },
+        { role: "user", content: llmInput },
       ],
     });
     const answer = (generateResponse as { response: string }).response;
+
+    const trace = buildTransactionTrace({
+      question,
+      provider: "workers-ai",
+      model: GENERATION_MODEL,
+      pathTaken: webSources.length > 0 ? "web_fallback" : "pdf_only",
+      jevAnnotated: jevResult.chunks,
+      keptKeys,
+      llmInput,
+      llmOutput: answer,
+      jevEnabled,
+      jevCostUsd: jevResult.costUsd,
+    });
+    ctx.waitUntil(recordTransaction(env, trace));
 
     return Response.json({
       answer,
