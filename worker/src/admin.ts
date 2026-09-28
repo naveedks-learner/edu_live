@@ -58,7 +58,8 @@ const RANGE_TO_MS: Record<string, number> = {
 
 export async function handleAdminCosting(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const range = RANGE_TO_MS[url.searchParams.get("range") ?? "1d"] ? url.searchParams.get("range")! : "1d";
+  const requestedRange = url.searchParams.get("range") ?? "1d";
+  const range = RANGE_TO_MS[requestedRange] ? requestedRange : "1d";
   const since = new Date(Date.now() - RANGE_TO_MS[range]).toISOString();
 
   const lastTransaction = await env.EDU_LIVE_DB.prepare(

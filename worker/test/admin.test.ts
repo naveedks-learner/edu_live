@@ -160,4 +160,40 @@ describe("handleAdminCosting", () => {
     expect(body.range).toBe("1d");
     expect(body.lastTransaction).toBeNull();
   });
+
+  it("defaults to a 1d range without throwing when no range query param is given", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null,
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminCosting(new Request("https://worker.example/admin/costing"), env);
+    const body = (await response.json()) as { range: string };
+
+    expect(response.status).toBe(200);
+    expect(body.range).toBe("1d");
+  });
+
+  it("falls back to 1d for an unrecognized range value instead of throwing", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null,
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminCosting(new Request("https://worker.example/admin/costing?range=bogus"), env);
+    const body = (await response.json()) as { range: string };
+
+    expect(response.status).toBe(200);
+    expect(body.range).toBe("1d");
+  });
 });
