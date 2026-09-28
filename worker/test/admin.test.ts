@@ -1,0 +1,163 @@
+import { describe, it, expect } from "vitest";
+import {
+  isAdminAuthorized,
+  handleAdminDocuments,
+  handleAdminTransactions,
+  handleAdminCosting,
+} from "../src/admin";
+import type { Env } from "../src/index";
+
+function makeEnv(overrides: Partial<Env> = {}): Env {
+  return {
+    ADMIN_API_KEY: "admin-secret",
+    PDF_BUCKET: { list: async () => ({ objects: [] }) },
+    EDU_LIVE_DB: {
+      prepare: () => ({
+        bind: () => ({ all: async () => ({ results: [] }), first: async () => null }),
+      }),
+    },
+    ...overrides,
+  } as unknown as Env;
+}
+
+function req(headers: Record<string, string> = {}) {
+  return new Request("https://worker.example/admin/documents", { headers });
+}
+
+describe("isAdminAuthorized", () => {
+  it("rejects a request with no key when one is configured", () => {
+    expect(isAdminAuthorized(req(), makeEnv())).toBe(false);
+  });
+
+  it("rejects a request with the wrong key", () => {
+    expect(isAdminAuthorized(req({ "x-admin-key": "wrong" }), makeEnv())).toBe(false);
+  });
+
+  it("accepts a request with the correct key", () => {
+    expect(isAdminAuthorized(req({ "x-admin-key": "admin-secret" }), makeEnv())).toBe(true);
+  });
+
+  it("allows requests through unauthenticated when ADMIN_API_KEY is not configured", () => {
+    expect(isAdminAuthorized(req(), makeEnv({ ADMIN_API_KEY: "" }))).toBe(true);
+  });
+});
+
+describe("handleAdminDocuments", () => {
+  it("returns an empty list when no documents are indexed", async () => {
+    const response = await handleAdminDocuments(makeEnv());
+    expect(await response.json()).toEqual({ documents: [] });
+  });
+
+  it("renders null for missing customMetadata fields (pre-migration PDFs)", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [{ key: "old-notes.pdf", size: 1234, customMetadata: undefined }],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { chunkCount: number | null }[] };
+
+    expect(body.documents[0]).toMatchObject({
+      name: "old-notes.pdf",
+      sizeBytes: 1234,
+      chunkCount: null,
+      pageCount: null,
+      indexedAt: null,
+    });
+  });
+
+  it("parses numeric customMetadata fields for documents ingested after this change", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [
+            {
+              key: "notes.pdf",
+              size: 5000,
+              customMetadata: { chunkCount: "12", pageCount: "3", indexedAt: "2026-09-28T00:00:00.000Z" },
+            },
+          ],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { chunkCount: number; pageCount: number }[] };
+
+    expect(body.documents[0].chunkCount).toBe(12);
+    expect(body.documents[0].pageCount).toBe(3);
+  });
+});
+
+describe("handleAdminTransactions", () => {
+  it("returns an empty list when there are no transactions", async () => {
+    const response = await handleAdminTransactions(req(), makeEnv());
+    expect(await response.json()).toEqual({ transactions: [] });
+  });
+
+  it("parses JSON columns back into objects and defaults limit to 3", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: (sql: string) => ({
+          bind: (...args: unknown[]) => ({
+            all: async () => {
+              expect(sql).toContain("LIMIT");
+              expect(args[0]).toBe(3);
+              return {
+                results: [
+                  {
+                    id: 1,
+                    timestamp: "2026-09-28T00:00:00.000Z",
+                    question: "q",
+                    provider: "workers-ai",
+                    model: "m",
+                    path_taken: "pdf_only",
+                    confidence: 0.8,
+                    retrieval_json: "[]",
+                    llm_input: "in",
+                    llm_output: "out",
+                    jev_input_json: null,
+                    jev_output_json: null,
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    jev_cost_usd: 0,
+                    llm_cost_usd: 0,
+                  },
+                ],
+              };
+            },
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminTransactions(req(), env);
+    const body = (await response.json()) as { transactions: { retrieval: unknown[]; jevInput: null }[] };
+
+    expect(body.transactions[0].retrieval).toEqual([]);
+    expect(body.transactions[0].jevInput).toBeNull();
+  });
+});
+
+describe("handleAdminCosting", () => {
+  it("returns a zeroed summary when there is no data", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null,
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminCosting(new Request("https://worker.example/admin/costing?range=1d"), env);
+    const body = (await response.json()) as { range: string; lastTransaction: null };
+
+    expect(body.range).toBe("1d");
+    expect(body.lastTransaction).toBeNull();
+  });
+});
