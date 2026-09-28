@@ -114,10 +114,15 @@ Fixed pipeline, no agentic loop (see non-goals):
 Each stage catches its own failures and degrades gracefully rather than
 hard-failing the request — same philosophy the Python app already follows
 in `store.py`/`web_search.py`/`reranker.py`:
-- Guardrail embedding failure → log it, treat as allowed (fail open) rather
-  than blocking legitimate traffic on an infra hiccup. *(Open question for
-  plan/review: fail-open vs fail-closed on guardrail errors — flagging
-  this explicitly since it's a real product decision, not a code detail.)*
+- Guardrail embedding failure → **fail closed**: block the question and
+  return a distinct "temporarily unavailable, please try again" message
+  (not the normal scope/age refusal, so students and admins can tell an
+  infra hiccup apart from an actual policy block) and log it clearly
+  (e.g. `reason: "guardrail_error"` vs `reason: "out_of_scope"` /
+  `"age_inappropriate"`) so it shows up distinctly in
+  `wrangler tail`/future observability. Resolved per user: safety takes
+  priority over availability here, as long as the cause is visible to
+  admins/users rather than silently indistinguishable from a real block.
 - Rerank failure → fall back to cosine order.
 - JEV failure/timeout → skip filtering, use reranked chunks as-is.
 - Web search failure → proceed with whatever document chunks exist, or a
