@@ -1,0 +1,19 @@
+name = "edu-live-worker"
+main = "src/index.ts"
+compatibility_date = "2026-09-28"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "edu-live-chunks"
+
+[[r2_buckets]]
+binding = "PDF_BUCKET"
+bucket_name = "edu-live-pdfs"
+
+[vars]
+GUARDRAIL_ENABLED = "true"
+JEV_ENABLED = "true"

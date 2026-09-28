@@ -15,3 +15,8 @@ observability.db
 # Misc local artifacts
 .claude.zip
 .claude/
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.wrangler/
+worker/dist/
