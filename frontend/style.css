@@ -1,0 +1,7 @@
+body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+#chat-log { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
+.message { margin-bottom: 0.75rem; }
+.message.user { font-weight: bold; }
+.message.assistant { white-space: pre-wrap; }
+#chat-form { display: flex; gap: 0.5rem; }
+#question-input { flex: 1; padding: 0.5rem; }
