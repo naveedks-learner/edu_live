@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime/generated data (rebuildable, don't want it bloating the repo)
+chroma_db/
+app.log
+observability.db
+
+# Misc local artifacts
+.claude.zip
+.claude/
