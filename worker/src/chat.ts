@@ -23,6 +23,11 @@ Audience and scope:
 
 Policy:
 - Answer only from the context provided below (documents and/or web results).
+- Stay as close as possible to the wording of the source material - prefer quoting or closely
+  paraphrasing the provided document context over rephrasing in your own words. The uploaded notes
+  are carefully prepared study material; do not dilute or rewrite their content, and do not add
+  facts, examples, or explanations that are not present in the context, even if you know them to be
+  true from general knowledge.
 - If the context doesn't answer the question, say so clearly instead of guessing.
 - Name the source document (with page number) or web page you used.
 - Keep answers concise unless the question needs detail.`;
@@ -33,7 +38,10 @@ const ANSWER_STYLE_INSTRUCTIONS: Record<AnswerStyle, string> = {
   auto: "",
   short: "\n\nAnswer style: Answer in exactly 1-2 sentences, examiner-style. No elaboration or extra examples.",
   detailed:
-    "\n\nAnswer style: Answer in 5-10 sentences, structured with a brief explanation and an example where useful.",
+    "\n\nAnswer style: Answer in 5-10 sentences, structured with a brief explanation and an example where useful. " +
+    "Treat 5-10 sentences as a ceiling, not a requirement - if the retrieved context is too limited to honestly " +
+    "support that much detail, say so and give the fullest answer the context actually supports, without adding " +
+    "information beyond it.",
 };
 
 // Hard backstop on generation length per style - the system prompt instruction
