@@ -26,3 +26,17 @@ describe("handleCorsPreflight", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 });
+
+describe("withCors GET support", () => {
+  it("allows GET alongside POST", () => {
+    const response = withCors(Response.json({ ok: true }));
+    expect(response.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+  });
+
+  it("allows the x-admin-key and x-ingest-key headers", () => {
+    const response = withCors(Response.json({ ok: true }));
+    const allowed = response.headers.get("Access-Control-Allow-Headers") ?? "";
+    expect(allowed).toContain("x-admin-key");
+    expect(allowed).toContain("x-ingest-key");
+  });
+});
