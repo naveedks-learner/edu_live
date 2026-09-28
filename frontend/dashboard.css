@@ -93,6 +93,16 @@ body {
 
 .card h2, .card h3 { margin-top: 0; }
 
+.upload-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+.upload-row input[type="file"] { flex: 1; font-size: 0.9rem; }
+.upload-row input[type="password"] {
+  flex: 1;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
 .metric-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .metric {
   min-width: 140px;

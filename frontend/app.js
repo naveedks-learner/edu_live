@@ -1,44 +1,9 @@
 const WORKER_URL = "https://edu-live-worker.naveed-ks.workers.dev";
-// Shared secret for POST /ingest, mirrors the Worker's INGEST_API_KEY.
-// Update this if you configure INGEST_API_KEY via `wrangler secret put`.
-const INGEST_KEY = "";
 
-const fileInput = document.getElementById("file-input");
-const uploadBtn = document.getElementById("upload-btn");
-const uploadStatus = document.getElementById("upload-status");
 const chatForm = document.getElementById("chat-form");
 const questionInput = document.getElementById("question-input");
+const answerStyleSelect = document.getElementById("answer-style-select");
 const chatLog = document.getElementById("chat-log");
-
-uploadBtn.addEventListener("click", async () => {
-  const file = fileInput.files[0];
-  if (!file) {
-    uploadStatus.textContent = "Choose a PDF first.";
-    return;
-  }
-
-  uploadBtn.disabled = true;
-  uploadStatus.textContent = "Uploading...";
-  const formData = new FormData();
-  formData.append("file", file);
-
-  try {
-    const response = await fetch(`${WORKER_URL}/ingest`, {
-      method: "POST",
-      headers: INGEST_KEY ? { "x-ingest-key": INGEST_KEY } : {},
-      body: formData,
-    });
-    const result = await response.json();
-
-    uploadStatus.textContent = response.ok
-      ? `${result.status}: ${result.source}${result.chunkCount ? ` (${result.chunkCount} chunks)` : ""}`
-      : `Error: ${result.error}`;
-  } catch (err) {
-    uploadStatus.textContent = `Error: could not reach the server (${err.message})`;
-  } finally {
-    uploadBtn.disabled = false;
-  }
-});
 
 const THINKING_PHRASES = ["Thinking", "Searching your notes", "Checking sources", "Composing an answer"];
 
@@ -63,7 +28,7 @@ chatForm.addEventListener("submit", async (event) => {
     const response = await fetch(`${WORKER_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, answerStyle: answerStyleSelect.value }),
     });
     const result = await response.json();
 

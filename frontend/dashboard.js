@@ -34,13 +34,76 @@ function renderError(el, message) {
 
 // --- Tab: PDFs & Chunks ---
 
+const INGEST_KEY_STORAGE = "edukripa-ingest-key";
+
+function uploadCardHtml() {
+  const savedKey = localStorage.getItem(INGEST_KEY_STORAGE) ?? "";
+  return `
+    <div class="card" id="upload-card">
+      <h2>Upload notes (PDF)</h2>
+      <div class="upload-row">
+        <input type="password" id="ingest-key-input" placeholder="x-ingest-key (if configured)" autocomplete="off" value="${escapeHtml(savedKey)}" />
+      </div>
+      <div class="upload-row">
+        <input type="file" id="file-input" accept="application/pdf" />
+        <button id="upload-btn">Upload</button>
+      </div>
+      <p id="upload-status" class="txn-meta"></p>
+    </div>`;
+}
+
+function wireUploadCard(onUploaded) {
+  const ingestKeyInput = document.getElementById("ingest-key-input");
+  const fileInput = document.getElementById("file-input");
+  const uploadBtn = document.getElementById("upload-btn");
+  const uploadStatus = document.getElementById("upload-status");
+
+  ingestKeyInput.addEventListener("input", () => {
+    localStorage.setItem(INGEST_KEY_STORAGE, ingestKeyInput.value);
+  });
+
+  uploadBtn.addEventListener("click", async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+      uploadStatus.textContent = "Choose a PDF first.";
+      return;
+    }
+
+    uploadBtn.disabled = true;
+    uploadStatus.textContent = "Uploading...";
+    const formData = new FormData();
+    formData.append("file", file);
+    const ingestKey = ingestKeyInput.value.trim();
+
+    try {
+      const response = await fetch(`${WORKER_URL}/ingest`, {
+        method: "POST",
+        headers: ingestKey ? { "x-ingest-key": ingestKey } : {},
+        body: formData,
+      });
+      const result = await response.json();
+
+      uploadStatus.textContent = response.ok
+        ? `${result.status}: ${result.source}${result.chunkCount ? ` (${result.chunkCount} chunks)` : ""}`
+        : `Error: ${result.error}`;
+
+      if (response.ok) onUploaded();
+    } catch (err) {
+      uploadStatus.textContent = `Error: could not reach the server (${err.message})`;
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  });
+}
+
 async function loadDocumentsTab() {
   const el = document.getElementById("tab-documents");
   renderLoading(el);
   try {
     const { documents, chunkPreviewCount } = await fetchAdmin("/admin/documents");
     if (documents.length === 0) {
-      el.innerHTML = `<div class="card empty-state">No documents indexed yet.</div>`;
+      el.innerHTML = `${uploadCardHtml()}<div class="card empty-state">No documents indexed yet.</div>`;
+      wireUploadCard(loadDocumentsTab);
       return;
     }
 
@@ -72,6 +135,7 @@ async function loadDocumentsTab() {
       .join("");
 
     el.innerHTML = `
+      ${uploadCardHtml()}
       <div class="card">
         <div class="metric-row">
           <div class="metric"><div class="label">Documents</div><div class="value">${documents.length}</div></div>
@@ -86,6 +150,7 @@ async function loadDocumentsTab() {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+    wireUploadCard(loadDocumentsTab);
   } catch (err) {
     renderError(el, err.message);
   }

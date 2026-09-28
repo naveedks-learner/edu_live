@@ -283,6 +283,70 @@ describe("handleChat retrieval status accuracy", () => {
   });
 });
 
+describe("handleChat answerStyle", () => {
+  function makeEnvCapturingGeneration(captured: { systemPrompt?: string; maxTokens?: number }): Env {
+    return makeEnv({
+      AI: {
+        run: async (model: string, opts?: { messages?: { role: string; content: string }[]; max_tokens?: number }) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          captured.systemPrompt = opts?.messages?.find((m) => m.role === "system")?.content;
+          captured.maxTokens = opts?.max_tokens;
+          return { response: "an answer" };
+        },
+      },
+    });
+  }
+
+  it("appends no style instruction and uses the default max_tokens when answerStyle is missing", async () => {
+    const captured: { systemPrompt?: string; maxTokens?: number } = {};
+    const env = makeEnvCapturingGeneration(captured);
+
+    await handleChat(makeChatRequest("what is reflection of light"), env, noopCtx());
+
+    expect(captured.systemPrompt).not.toMatch(/Answer style/i);
+    expect(captured.maxTokens).toBe(512);
+  });
+
+  it("appends the short instruction and a low max_tokens when answerStyle is 'short'", async () => {
+    const captured: { systemPrompt?: string; maxTokens?: number } = {};
+    const env = makeEnvCapturingGeneration(captured);
+
+    await handleChat(makeRequest({ question: "what is reflection of light", answerStyle: "short" }), env, noopCtx());
+
+    expect(captured.systemPrompt).toMatch(/1-2 sentences/i);
+    expect(captured.maxTokens).toBe(100);
+  });
+
+  it("appends the detailed instruction and a higher max_tokens when answerStyle is 'detailed'", async () => {
+    const captured: { systemPrompt?: string; maxTokens?: number } = {};
+    const env = makeEnvCapturingGeneration(captured);
+
+    await handleChat(
+      makeRequest({ question: "what is reflection of light", answerStyle: "detailed" }),
+      env,
+      noopCtx()
+    );
+
+    expect(captured.systemPrompt).toMatch(/5-10 sentences/i);
+    expect(captured.maxTokens).toBe(500);
+  });
+
+  it("falls back to 'auto' behavior when answerStyle is an unrecognized value", async () => {
+    const captured: { systemPrompt?: string; maxTokens?: number } = {};
+    const env = makeEnvCapturingGeneration(captured);
+
+    await handleChat(
+      makeRequest({ question: "what is reflection of light", answerStyle: "essay" }),
+      env,
+      noopCtx()
+    );
+
+    expect(captured.systemPrompt).not.toMatch(/Answer style/i);
+    expect(captured.maxTokens).toBe(512);
+  });
+});
+
 describe("handleChat transaction tracing", () => {
   it("records a transaction via EDU_LIVE_DB after a successful response, without delaying the response", async () => {
     const inserted: unknown[] = [];

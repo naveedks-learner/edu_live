@@ -38,10 +38,6 @@ body {
 }
 .card h2 { margin-top: 0; font-size: 1.1rem; }
 
-.upload-row { display: flex; gap: 0.5rem; align-items: center; }
-.upload-row input[type="file"] { flex: 1; font-size: 0.9rem; }
-.status-text { font-size: 0.85rem; color: var(--text-muted); min-height: 1.2em; }
-
 button {
   background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
   color: white;
@@ -69,6 +65,12 @@ button:disabled { opacity: 0.6; cursor: default; }
 .message.assistant.thinking { color: var(--text-muted); font-style: italic; }
 
 #chat-form { display: flex; gap: 0.5rem; }
+#answer-style-select {
+  padding: 0.6rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
 #question-input {
   flex: 1;
   padding: 0.6rem 0.75rem;

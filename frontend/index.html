@@ -15,19 +15,15 @@
   </header>
 
   <main class="app-main">
-    <section class="card" id="upload-section">
-      <h2>Upload notes (PDF)</h2>
-      <div class="upload-row">
-        <input type="file" id="file-input" accept="application/pdf" />
-        <button id="upload-btn">Upload</button>
-      </div>
-      <p id="upload-status" class="status-text"></p>
-    </section>
-
     <section class="card" id="chat-section">
       <h2>Ask a question</h2>
       <div id="chat-log"></div>
       <form id="chat-form">
+        <select id="answer-style-select" title="Answer length">
+          <option value="auto" selected>Auto</option>
+          <option value="short">1-2 Marks</option>
+          <option value="detailed">5 Marks</option>
+        </select>
         <input type="text" id="question-input" placeholder="Ask a science or maths question..." required />
         <button type="submit">Send</button>
       </form>

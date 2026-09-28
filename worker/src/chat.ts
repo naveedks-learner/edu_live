@@ -27,6 +27,28 @@ Policy:
 - Name the source document (with page number) or web page you used.
 - Keep answers concise unless the question needs detail.`;
 
+export type AnswerStyle = "auto" | "short" | "detailed";
+
+const ANSWER_STYLE_INSTRUCTIONS: Record<AnswerStyle, string> = {
+  auto: "",
+  short: "\n\nAnswer style: Answer in exactly 1-2 sentences, examiner-style. No elaboration or extra examples.",
+  detailed:
+    "\n\nAnswer style: Answer in 5-10 sentences, structured with a brief explanation and an example where useful.",
+};
+
+// Hard backstop on generation length per style - the system prompt instruction
+// does the real steering, this just prevents a runaway "detailed" answer or
+// catches the rare case where the model ignores a "short" instruction.
+const ANSWER_STYLE_MAX_TOKENS: Record<AnswerStyle, number> = {
+  auto: 512,
+  short: 100,
+  detailed: 500,
+};
+
+function parseAnswerStyle(value: unknown): AnswerStyle {
+  return value === "short" || value === "detailed" ? value : "auto";
+}
+
 async function recordTransaction(env: Env, trace: TransactionTrace): Promise<void> {
   try {
     await env.EDU_LIVE_DB.prepare(
@@ -61,8 +83,9 @@ async function recordTransaction(env: Env, trace: TransactionTrace): Promise<voi
 }
 
 export async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as { question?: string } | null;
+  const body = (await request.json().catch(() => null)) as { question?: string; answerStyle?: string } | null;
   const question = body?.question?.trim();
+  const answerStyle = parseAnswerStyle(body?.answerStyle);
 
   if (!question) {
     return Response.json({ error: "Expected JSON body with a 'question' field" }, { status: 400 });
@@ -145,9 +168,10 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     } else {
       const generateResponse = await env.AI.run(GENERATION_MODEL, {
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT + ANSWER_STYLE_INSTRUCTIONS[answerStyle] },
           { role: "user", content: llmInput },
         ],
+        max_tokens: ANSWER_STYLE_MAX_TOKENS[answerStyle],
       });
       answer = (generateResponse as { response: string }).response;
     }
