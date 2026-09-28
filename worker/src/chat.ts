@@ -94,9 +94,17 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     const jevEnabled = env.JEV_ENABLED === "true";
     const jevResult = jevEnabled
       ? await scoreChunksWithJev(question, reranked, env.OPENROUTER_API_KEY)
-      : { chunks: reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }) as JevScoredChunk), costUsd: 0 };
+      : {
+          chunks: reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }) as JevScoredChunk),
+          costUsd: 0,
+          success: true,
+        };
 
-    const docSources = jevEnabled ? filterJevScored(jevResult.chunks) : jevResult.chunks;
+    // Only filter by relevance when JEV actually ran and produced real
+    // scores. If JEV failed, jevResult.chunks all carry jevRelevance=null -
+    // filtering on that would discard every chunk, which is worse than not
+    // running JEV at all.
+    const docSources = jevEnabled && jevResult.success ? filterJevScored(jevResult.chunks) : jevResult.chunks;
     const keptKeys = new Set(docSources.map((c) => `${c.source}::${c.chunkId}`));
 
     let webSources: Awaited<ReturnType<typeof webSearch>> = [];

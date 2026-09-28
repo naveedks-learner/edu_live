@@ -99,18 +99,24 @@ export async function scoreChunksWithJev(
   query: string,
   chunks: RerankedChunk[],
   apiKey: string
-): Promise<{ chunks: JevScoredChunk[]; costUsd: number }> {
-  if (chunks.length === 0) return { chunks: [], costUsd: 0 };
+): Promise<{ chunks: JevScoredChunk[]; costUsd: number; success: boolean }> {
+  if (chunks.length === 0) return { chunks: [], costUsd: 0, success: true };
 
   try {
     const scores = await Promise.all(chunks.map((c) => scoreChunkWithJev(query, c.text, apiKey)));
     const costUsd = scores.reduce((sum, s) => sum + s.costUsd, 0);
-    return { chunks: annotateWithJevScores(chunks, scores), costUsd };
+    return { chunks: annotateWithJevScores(chunks, scores), costUsd, success: true };
   } catch (err) {
+    // JEV failed entirely (network error, bad response) - fail OPEN: the
+    // caller must not filter these chunks by relevance (there are no real
+    // scores to filter on), or every chunk gets dropped as if none were
+    // relevant. success=false is how callers distinguish "JEV ran and found
+    // nothing relevant" from "JEV didn't run at all".
     console.error("JEV call failed, passing chunks through unfiltered", err);
     return {
       chunks: chunks.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false })),
       costUsd: 0,
+      success: false,
     };
   }
 }

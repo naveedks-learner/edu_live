@@ -48,6 +48,22 @@ describe("handleAdminDocuments", () => {
     expect(await response.json()).toEqual({ documents: [] });
   });
 
+  it("requests customMetadata from R2, without which real buckets omit it from list results", async () => {
+    let receivedOptions: unknown;
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async (options: unknown) => {
+          receivedOptions = options;
+          return { objects: [] };
+        },
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    await handleAdminDocuments(env);
+
+    expect(receivedOptions).toEqual({ include: ["customMetadata"] });
+  });
+
   it("renders null for missing customMetadata fields (pre-migration PDFs)", async () => {
     const env = makeEnv({
       PDF_BUCKET: {
@@ -90,12 +106,46 @@ describe("handleAdminDocuments", () => {
     expect(body.documents[0].chunkCount).toBe(12);
     expect(body.documents[0].pageCount).toBe(3);
   });
+
+  it("returns a JSON 500, not an uncaught exception, when R2 throws", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => {
+          throw new Error("R2 unavailable");
+        },
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toHaveProperty("error");
+  });
 });
 
 describe("handleAdminTransactions", () => {
   it("returns an empty list when there are no transactions", async () => {
     const response = await handleAdminTransactions(req(), makeEnv());
     expect(await response.json()).toEqual({ transactions: [] });
+  });
+
+  it("returns a JSON 500, not an uncaught exception, when D1 throws", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            all: async () => {
+              throw new Error("D1 unavailable");
+            },
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminTransactions(req(), env);
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toHaveProperty("error");
   });
 
   it("parses JSON columns back into objects and defaults limit to 3", async () => {
@@ -159,6 +209,25 @@ describe("handleAdminCosting", () => {
 
     expect(body.range).toBe("1d");
     expect(body.lastTransaction).toBeNull();
+  });
+
+  it("returns a JSON 500, not an uncaught exception, when D1 throws", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => {
+              throw new Error("D1 unavailable");
+            },
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminCosting(new Request("https://worker.example/admin/costing"), env);
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toHaveProperty("error");
   });
 
   it("defaults to a 1d range without throwing when no range query param is given", async () => {

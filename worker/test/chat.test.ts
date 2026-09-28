@@ -57,6 +57,39 @@ describe("handleChat error handling", () => {
   });
 });
 
+describe("handleChat JEV failure handling", () => {
+  it("passes retrieved chunks through unfiltered (fail-open) when JEV is enabled but the JEV call fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      if (String(input).includes("openrouter.ai")) throw new Error("JEV unreachable");
+      throw new Error(`unexpected fetch to ${input}`);
+    };
+
+    try {
+      const env = makeEnv({
+        JEV_ENABLED: "true",
+        OPENROUTER_API_KEY: "fake-key",
+        VECTORIZE: {
+          query: async () => ({
+            matches: [
+              { score: 0.9, metadata: { text: "a passage about light", page: 1, pageEnd: 1, source: "notes.pdf", chunkId: 0 } },
+            ],
+          }),
+        },
+      });
+
+      const response = await handleChat(makeChatRequest("what is reflection of light"), env, noopCtx());
+      const body = (await response.json()) as { docSources: { source: string }[] };
+
+      expect(response.status).toBe(200);
+      expect(body.docSources.length).toBe(1);
+      expect(body.docSources[0].source).toBe("notes.pdf");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe("handleChat transaction tracing", () => {
   it("records a transaction via EDU_LIVE_DB after a successful response, without delaying the response", async () => {
     const inserted: unknown[] = [];

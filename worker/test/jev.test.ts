@@ -53,7 +53,7 @@ describe("filterJevScored", () => {
 });
 
 describe("scoreChunksWithJev", () => {
-  it("returns every chunk annotated (not filtered) and never throws when the JEV request fails", async () => {
+  it("returns every chunk annotated (not filtered), never throws, and reports success=false when the JEV request fails", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => { throw new Error("network unreachable"); };
 
@@ -63,6 +63,22 @@ describe("scoreChunksWithJev", () => {
       expect(result.chunks.length).toBe(chunks.length);
       expect(result.chunks.every((c) => c.jevRelevance === null && c.jevBlocked === false)).toBe(true);
       expect(result.costUsd).toBe(0);
+      expect(result.success).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reports success=true when the JEV request succeeds", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ answers: { relevance: { score: 2.5 }, injection: { noul: 0.1 } } }), {
+        status: 200,
+      });
+
+    try {
+      const result = await scoreChunksWithJev("query", chunks.slice(0, 1), "fake-key");
+      expect(result.success).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -70,6 +86,6 @@ describe("scoreChunksWithJev", () => {
 
   it("returns an empty result for an empty chunk list without calling fetch", async () => {
     const result = await scoreChunksWithJev("query", [], "fake-key");
-    expect(result).toEqual({ chunks: [], costUsd: 0 });
+    expect(result).toEqual({ chunks: [], costUsd: 0, success: true });
   });
 });
