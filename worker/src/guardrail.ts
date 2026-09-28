@@ -9,10 +9,13 @@ export interface GuardrailDecision {
 // Specific phrases only - bare words like "drugs" or "sex" also appear in
 // legitimate biology/chemistry curriculum content (drug interactions,
 // sexual reproduction in plants, etc.) and would false-positive block them.
+// "get high" was narrowed to "get high on" after live review found it
+// matching "get high enough to reach orbit" (physics) and "get higher
+// marks" (a student asking about grades).
 const BLOCKED_PHRASES = [
   "hurt myself", "kill myself", "self harm", "self-harm", "suicide",
   "cut myself", "want to die",
-  "buy drugs", "illegal drugs", "get high", "cocaine", "heroin", "drug dealer",
+  "buy drugs", "illegal drugs", "get high on", "cocaine", "heroin", "drug dealer",
   "porn", "nude photos", "naked pics", "send nudes",
   "kill someone", "how to make a bomb", "how to make a weapon",
 ];
@@ -55,9 +58,18 @@ export const REFUSAL_GUARDRAIL_ERROR =
 
 export const DEFAULT_MIN_IN_SCOPE_SIMILARITY = 0.35;
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Word-boundary matching (not plain substring) so a blocked phrase must
+// appear as whole words - "heroin" no longer matches inside "heroine".
+const BLOCKED_PHRASE_PATTERNS = BLOCKED_PHRASES.map(
+  (phrase) => new RegExp(`\\b${escapeRegExp(phrase)}\\b`, "i")
+);
+
 export function containsBlockedKeyword(question: string): boolean {
-  const text = question.toLowerCase();
-  return BLOCKED_PHRASES.some((phrase) => text.includes(phrase));
+  return BLOCKED_PHRASE_PATTERNS.some((pattern) => pattern.test(question));
 }
 
 export function decideGuardrailOutcome(

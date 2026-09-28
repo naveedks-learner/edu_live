@@ -42,48 +42,56 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     }
   }
 
-  const embedResponse = await env.AI.run(EMBEDDING_MODEL, { text: [question] });
-  const questionVector = (embedResponse as { data: number[][] }).data[0];
+  try {
+    const embedResponse = await env.AI.run(EMBEDDING_MODEL, { text: [question] });
+    const questionVector = (embedResponse as { data: number[][] }).data[0];
 
-  const matches = await env.VECTORIZE.query(questionVector, { topK: TOP_K, returnMetadata: true });
-  const retrieved: RetrievedChunk[] = matches.matches.map((m) => ({
-    text: String(m.metadata?.text ?? ""),
-    page: Number(m.metadata?.page ?? 0),
-    pageEnd: Number(m.metadata?.pageEnd ?? 0),
-    source: String(m.metadata?.source ?? ""),
-    chunkId: Number(m.metadata?.chunkId ?? 0),
-    cosineScore: m.score,
-  }));
+    const matches = await env.VECTORIZE.query(questionVector, { topK: TOP_K, returnMetadata: true });
+    const retrieved: RetrievedChunk[] = matches.matches.map((m) => ({
+      text: String(m.metadata?.text ?? ""),
+      page: Number(m.metadata?.page ?? 0),
+      pageEnd: Number(m.metadata?.pageEnd ?? 0),
+      source: String(m.metadata?.source ?? ""),
+      chunkId: Number(m.metadata?.chunkId ?? 0),
+      cosineScore: m.score,
+    }));
 
-  const reranked = await rerank(question, retrieved, workersAiScoreFn(env.AI));
+    const reranked = await rerank(question, retrieved, workersAiScoreFn(env.AI));
 
-  const jevFiltered =
-    env.JEV_ENABLED === "true"
-      ? await callJev(question, reranked, env.OPENROUTER_API_KEY)
-      : reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }));
+    const jevFiltered =
+      env.JEV_ENABLED === "true"
+        ? await callJev(question, reranked, env.OPENROUTER_API_KEY)
+        : reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }));
 
-  let docSources = jevFiltered;
-  let webSources: Awaited<ReturnType<typeof webSearch>> = [];
+    let docSources = jevFiltered;
+    let webSources: Awaited<ReturnType<typeof webSearch>> = [];
 
-  if (docSources.length === 0) {
-    webSources = await webSearch(question);
+    if (docSources.length === 0) {
+      webSources = await webSearch(question);
+    }
+
+    const documentContext = docSources.map((c) => `[${c.source} p.${c.page}]\n${c.text}`).join("\n\n");
+    const webContext = webSources.length > 0 ? formatWebResultsAsContext(webSources) : "";
+    const context = [documentContext, webContext].filter(Boolean).join("\n\n---\n\n") || "No context found.";
+
+    const generateResponse = await env.AI.run(GENERATION_MODEL, {
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: `Question: ${question}\n\nContext:\n${context}` },
+      ],
+    });
+    const answer = (generateResponse as { response: string }).response;
+
+    return Response.json({
+      answer,
+      docSources: docSources.map((c) => ({ source: c.source, page: c.page, pageEnd: c.pageEnd, text: c.text })),
+      webSources,
+    });
+  } catch (err) {
+    console.error("chat pipeline failed", err);
+    return Response.json(
+      { error: "Something went wrong answering this question - please try again." },
+      { status: 502 }
+    );
   }
-
-  const documentContext = docSources.map((c) => `[${c.source} p.${c.page}]\n${c.text}`).join("\n\n");
-  const webContext = webSources.length > 0 ? formatWebResultsAsContext(webSources) : "";
-  const context = [documentContext, webContext].filter(Boolean).join("\n\n---\n\n") || "No context found.";
-
-  const generateResponse = await env.AI.run(GENERATION_MODEL, {
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Question: ${question}\n\nContext:\n${context}` },
-    ],
-  });
-  const answer = (generateResponse as { response: string }).response;
-
-  return Response.json({
-    answer,
-    docSources: docSources.map((c) => ({ source: c.source, page: c.page, pageEnd: c.pageEnd, text: c.text })),
-    webSources,
-  });
 }

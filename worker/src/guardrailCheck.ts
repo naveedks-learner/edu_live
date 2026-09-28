@@ -3,6 +3,7 @@ import {
   decideGuardrailOutcome,
   IN_SCOPE_EXAMPLE_QUESTIONS,
   OUT_OF_SCOPE_EXAMPLE_QUESTIONS,
+  REFUSAL_AGE_INAPPROPRIATE,
   REFUSAL_GUARDRAIL_ERROR,
   type GuardrailDecision,
 } from "./guardrail";
@@ -50,9 +51,16 @@ export async function checkQueryInScopeAndAgeAppropriate(
   question: string,
   ai: Ai
 ): Promise<GuardrailDecision> {
-  try {
-    const keywordBlocked = containsBlockedKeyword(question);
+  // Checked before any AI call, and returned immediately if true: a
+  // keyword-blocked question (e.g. a self-harm phrase) must never depend
+  // on Workers AI being reachable to be blocked, and must never receive
+  // the generic "guardrail_error" message instead of the age-inappropriate
+  // refusal just because an embedding call happened to fail first.
+  if (containsBlockedKeyword(question)) {
+    return { allowed: false, reason: "age_inappropriate", refusalMessage: REFUSAL_AGE_INAPPROPRIATE };
+  }
 
+  try {
     const { inScope, outScope } = await getReferenceEmbeddings(ai);
     const questionResp = await ai.run(EMBEDDING_MODEL, { text: [question] });
     const questionVector = (questionResp as { data: number[][] }).data[0];
@@ -60,7 +68,7 @@ export async function checkQueryInScopeAndAgeAppropriate(
     const inScopeSimilarity = meanCosineSimilarity(questionVector, inScope);
     const outScopeSimilarity = meanCosineSimilarity(questionVector, outScope);
 
-    return decideGuardrailOutcome(keywordBlocked, inScopeSimilarity, outScopeSimilarity);
+    return decideGuardrailOutcome(false, inScopeSimilarity, outScopeSimilarity);
   } catch (err) {
     console.error("guardrail_error", err);
     return { allowed: false, reason: "guardrail_error", refusalMessage: REFUSAL_GUARDRAIL_ERROR };

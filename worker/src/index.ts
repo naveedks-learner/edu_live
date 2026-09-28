@@ -1,5 +1,6 @@
 import { handleIngest } from "./ingestion";
 import { handleChat } from "./chat";
+import { withCors, handleCorsPreflight } from "./cors";
 
 export interface Env {
   AI: Ai;
@@ -10,19 +11,25 @@ export interface Env {
   // JEV runs via OpenRouter's typed-decision API (model "~typesafe/jev-latest"),
   // so it's authenticated with an OpenRouter key, not a separate JEV-specific one.
   OPENROUTER_API_KEY: string;
+  // Shared secret required on the x-ingest-key header for POST /ingest.
+  // Optional: if unset, /ingest is unauthenticated (e.g. local dev).
+  INGEST_API_KEY: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (request.method === "OPTIONS") {
+      return handleCorsPreflight();
+    }
     if (request.method === "POST" && url.pathname === "/ingest") {
-      return handleIngest(request, env);
+      return withCors(await handleIngest(request, env));
     }
     if (request.method === "POST" && url.pathname === "/chat") {
-      return handleChat(request, env);
+      return withCors(await handleChat(request, env));
     }
 
-    return new Response("Not found", { status: 404 });
+    return withCors(new Response("Not found", { status: 404 }));
   },
 };

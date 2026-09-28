@@ -17,6 +17,26 @@ describe("containsBlockedKeyword", () => {
   it("flags an explicit request to buy illegal drugs", () => {
     expect(containsBlockedKeyword("where can I buy illegal drugs")).toBe(true);
   });
+
+  it("does not flag a physics question about rockets getting high enough to reach orbit", () => {
+    expect(containsBlockedKeyword("how does a rocket get high enough to reach orbit")).toBe(false);
+  });
+
+  it("does not flag a student asking how to get higher marks", () => {
+    expect(containsBlockedKeyword("how do I get higher marks in physics")).toBe(false);
+  });
+
+  it("flags getting high on drugs", () => {
+    expect(containsBlockedKeyword("how do people get high on drugs")).toBe(true);
+  });
+
+  it("does not flag the word heroine (contains heroin as a substring, not a whole word)", () => {
+    expect(containsBlockedKeyword("who is the heroine of this novel")).toBe(false);
+  });
+
+  it("still flags heroin as a whole word", () => {
+    expect(containsBlockedKeyword("where can I buy heroin")).toBe(true);
+  });
 });
 
 describe("decideGuardrailOutcome", () => {
