@@ -1,0 +1,164 @@
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --border: #e2e4ea;
+  --text: #1a1d29;
+  --text-muted: #666a7a;
+  --brand-start: #4f46e5;
+  --brand-end: #14b8a6;
+  --pill-kept-bg: #dcfce7;
+  --pill-kept-text: #15803d;
+  --pill-discarded-bg: #f1f2f6;
+  --pill-discarded-text: #6b7280;
+  --pill-error-bg: #fee2e2;
+  --pill-error-text: #b91c1c;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20, 20, 40, 0.08), 0 1px 2px rgba(20, 20, 40, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dash-header {
+  background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
+  color: white;
+  padding: 2rem 1.5rem;
+}
+
+.dash-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.dash-header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.dash-subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+
+.admin-key-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.admin-key-field label { font-size: 0.75rem; opacity: 0.85; }
+.admin-key-field input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: none;
+  min-width: 220px;
+}
+
+.tabs {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.75rem 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  border: none;
+  background: none;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn.active {
+  color: var(--brand-start);
+  border-bottom-color: var(--brand-start);
+  font-weight: 600;
+}
+
+.dash-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.card h2, .card h3 { margin-top: 0; }
+
+.metric-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.metric {
+  min-width: 140px;
+}
+.metric .label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.metric .value { font-size: 1.6rem; font-weight: 700; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.pill-kept { background: var(--pill-kept-bg); color: var(--pill-kept-text); }
+.pill-discarded { background: var(--pill-discarded-bg); color: var(--pill-discarded-text); }
+.pill-error { background: var(--pill-error-bg); color: var(--pill-error-text); }
+
+.empty-state, .error-state, .loading-state {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.error-state { color: var(--pill-error-text); }
+
+.txn-card { margin-bottom: 1.5rem; }
+.txn-meta { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+.txn-meta strong { color: var(--text); }
+
+details.io-block {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+details.io-block summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+details.io-block pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fafafc;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.range-select { margin-bottom: 1rem; }
+.range-select select { padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); }
+
+@media (max-width: 640px) {
+  .dash-header-inner { flex-direction: column; align-items: flex-start; }
+  table { display: block; overflow-x: auto; }
+}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edukripa — Observability</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <header class="dash-header">
+    <div class="dash-header-inner">
+      <div>
+        <h1>Edukripa — RAG Observability</h1>
+        <p class="dash-subtitle">Indexed documents, per-query pipeline traces, and token/cost usage.</p>
+      </div>
+      <div class="admin-key-field">
+        <label for="admin-key-input">Admin key</label>
+        <input type="password" id="admin-key-input" placeholder="x-admin-key" autocomplete="off" />
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="documents" role="tab" aria-selected="true">PDFs &amp; Chunks</button>
+    <button class="tab-btn" data-tab="transactions" role="tab" aria-selected="false">TransactionTracker</button>
+    <button class="tab-btn" data-tab="costing" role="tab" aria-selected="false">Costing</button>
+  </nav>
+
+  <main class="dash-main">
+    <section id="tab-documents" class="tab-panel active"></section>
+    <section id="tab-transactions" class="tab-panel"></section>
+    <section id="tab-costing" class="tab-panel"></section>
+  </main>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
