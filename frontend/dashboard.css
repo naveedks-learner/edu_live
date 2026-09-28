@@ -195,3 +195,22 @@ details.io-block pre {
   overflow: auto;
   margin: 0;
 }
+
+.txn-card summary.txn-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.txn-card summary.txn-summary::-webkit-details-marker { display: none; }
+.txn-card summary.txn-summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.txn-card[open] summary.txn-summary::before { transform: rotate(90deg); }
+.txn-summary-question { font-weight: 600; font-size: 1rem; }
+.txn-summary-meta { font-size: 0.82rem; color: var(--text-muted); }

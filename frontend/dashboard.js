@@ -123,14 +123,13 @@ function renderRetrievalTable(retrieval) {
 
 function renderTransactionCard(txn) {
   return `
-    <div class="card txn-card">
+    <details class="card txn-card">
+      <summary class="txn-summary">
+        <span class="txn-summary-question">${escapeHtml(txn.question)}</span>
+        <span class="txn-summary-meta">Query #${txn.id} · ${new Date(txn.timestamp).toLocaleString()} · ${escapeHtml(txn.pathTaken)} · confidence ${txn.confidence != null ? txn.confidence.toFixed(2) : "—"}</span>
+      </summary>
       <div class="txn-meta">
-        Query #${txn.id} · ${new Date(txn.timestamp).toLocaleString()} · <strong>${escapeHtml(txn.provider)} / ${escapeHtml(txn.model)}</strong>
-      </div>
-      <h3>${escapeHtml(txn.question)}</h3>
-      <div class="metric-row">
-        <div class="metric"><div class="label">Path taken</div><div class="value">${escapeHtml(txn.pathTaken)}</div></div>
-        <div class="metric"><div class="label">Confidence</div><div class="value">${txn.confidence != null ? txn.confidence.toFixed(2) : "—"}</div></div>
+        <strong>${escapeHtml(txn.provider)} / ${escapeHtml(txn.model)}</strong>${txn.jevModel ? ` · JEV: <strong>${escapeHtml(txn.jevModel)}</strong>` : ""}
       </div>
       <h4>Retrieval results</h4>
       ${renderRetrievalTable(txn.retrieval)}
@@ -142,7 +141,7 @@ function renderTransactionCard(txn) {
              <details class="io-block"><summary>JEV output</summary><pre>${escapeHtml(JSON.stringify(txn.jevOutput, null, 2))}</pre></details>`
           : ""
       }
-    </div>`;
+    </details>`;
 }
 
 async function loadTransactionsTab() {
