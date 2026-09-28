@@ -1,3 +1,5 @@
+import { handleIngest } from "./ingestion";
+
 export interface Env {
   AI: Ai;
   VECTORIZE: VectorizeIndex;
@@ -9,6 +11,12 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return new Response("edu-live worker: not yet implemented", { status: 501 });
+    const url = new URL(request.url);
+
+    if (request.method === "POST" && url.pathname === "/ingest") {
+      return handleIngest(request, env);
+    }
+
+    return new Response("Not found", { status: 404 });
   },
 };

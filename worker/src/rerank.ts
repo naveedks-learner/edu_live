@@ -45,7 +45,11 @@ export async function rerank(
  */
 export function workersAiScoreFn(ai: Ai): ScoreFn {
   return async (query, candidates) => {
-    const response = await ai.run("@cf/baai/bge-reranker-base", {
+    // @cloudflare/workers-types doesn't include this model id in its typed
+    // run() overloads yet (the model id itself is unconfirmed against the
+    // live catalog - see the note above); cast through unknown for this call.
+    const run = ai.run.bind(ai) as unknown as (model: string, input: unknown) => Promise<unknown>;
+    const response = await run("@cf/baai/bge-reranker-base", {
       query,
       contexts: candidates.map((c) => ({ text: c.text })),
     });

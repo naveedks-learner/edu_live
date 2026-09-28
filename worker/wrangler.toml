@@ -9,6 +9,7 @@ binding = "AI"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "edu-live-chunks"
+remote = true
 
 [[r2_buckets]]
 binding = "PDF_BUCKET"
