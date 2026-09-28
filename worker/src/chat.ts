@@ -59,7 +59,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 
   const jevFiltered =
     env.JEV_ENABLED === "true"
-      ? await callJev(question, reranked, env.JEV_API_KEY)
+      ? await callJev(question, reranked, env.OPENROUTER_API_KEY)
       : reranked.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }));
 
   let docSources = jevFiltered;

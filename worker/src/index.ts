@@ -7,7 +7,9 @@ export interface Env {
   PDF_BUCKET: R2Bucket;
   GUARDRAIL_ENABLED: string;
   JEV_ENABLED: string;
-  JEV_API_KEY: string;
+  // JEV runs via OpenRouter's typed-decision API (model "~typesafe/jev-latest"),
+  // so it's authenticated with an OpenRouter key, not a separate JEV-specific one.
+  OPENROUTER_API_KEY: string;
 }
 
 export default {
