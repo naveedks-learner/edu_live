@@ -25,6 +25,7 @@ export interface TransactionTrace {
   llmOutput: string;
   jevInput: { source: string; chunkId: number; passage: string }[] | null;
   jevOutput: { source: string; chunkId: number; relevance: number | null; blocked: boolean }[] | null;
+  jevModel: string | null;
   inputTokens: number;
   outputTokens: number;
   jevCostUsd: number;
@@ -48,6 +49,7 @@ export function buildTransactionTrace(params: {
   llmInput: string;
   llmOutput: string;
   jevEnabled: boolean;
+  jevModel: string | null;
   jevCostUsd: number;
 }): TransactionTrace {
   const retrieval: RetrievalTraceEntry[] = params.jevAnnotated.map((chunk, i) => ({
@@ -80,6 +82,7 @@ export function buildTransactionTrace(params: {
     jevOutput: params.jevEnabled
       ? params.jevAnnotated.map((c) => ({ source: c.source, chunkId: c.chunkId, relevance: c.jevRelevance, blocked: c.jevBlocked }))
       : null,
+    jevModel: params.jevModel,
     inputTokens: estimateTokens(params.llmInput),
     outputTokens: estimateTokens(params.llmOutput),
     jevCostUsd: params.jevCostUsd,

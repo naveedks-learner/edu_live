@@ -7,7 +7,7 @@ export interface JevScoredChunk extends RerankedChunk {
 
 const DEFAULT_REL_MIN = 2;
 const DEFAULT_INJ_MAX = 0.5;
-const JEV_MODEL = "~typesafe/jev-latest";
+export const JEV_MODEL_ID = "~typesafe/jev-latest";
 // 4 levels so "score" (0-indexed) lands in [0,3], matching DEFAULT_REL_MIN=2.
 const RELEVANCE_CRITERIA = ["Not relevant", "Low relevance", "Relevant", "Highly relevant"];
 
@@ -53,7 +53,7 @@ async function scoreChunkWithJev(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: JEV_MODEL,
+      model: JEV_MODEL_ID,
       state: `Question: ${query}\n\nCandidate passage: ${chunkText}`,
       questions: {
         relevance: {

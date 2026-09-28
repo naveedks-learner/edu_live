@@ -34,6 +34,7 @@ describe("buildTransactionTrace", () => {
     llmInput: "Question: what is reflection of light\n\nContext:\nsome passage",
     llmOutput: "Reflection of light is...",
     jevEnabled: true,
+    jevModel: "~typesafe/jev-latest",
     jevCostUsd: 0.002,
   };
 
@@ -104,5 +105,25 @@ describe("buildTransactionTrace", () => {
     expect(trace.pathTaken).toBe("web_fallback");
     expect(trace.inputTokens).toBe(estimateTokens(base.llmInput));
     expect(trace.outputTokens).toBe(estimateTokens(base.llmOutput));
+  });
+
+  it("includes the JEV model id when JEV is enabled, and null when it isn't", () => {
+    const withJev = buildTransactionTrace({
+      ...base,
+      jevEnabled: true,
+      jevModel: "~typesafe/jev-latest",
+      jevAnnotated: [],
+      keptKeys: new Set(),
+    });
+    expect(withJev.jevModel).toBe("~typesafe/jev-latest");
+
+    const withoutJev = buildTransactionTrace({
+      ...base,
+      jevEnabled: false,
+      jevModel: null,
+      jevAnnotated: [],
+      keptKeys: new Set(),
+    });
+    expect(withoutJev.jevModel).toBeNull();
   });
 });

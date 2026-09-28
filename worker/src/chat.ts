@@ -1,16 +1,19 @@
 import type { Env } from "./index";
 import { checkQueryInScopeAndAgeAppropriate } from "./guardrailCheck";
 import { rerank, workersAiScoreFn, type RetrievedChunk } from "./rerank";
-import { scoreChunksWithJev, filterJevScored, type JevScoredChunk } from "./jev";
+import { scoreChunksWithJev, filterJevScored, JEV_MODEL_ID, type JevScoredChunk } from "./jev";
 import { webSearch, formatWebResultsAsContext } from "./webSearch";
 import { buildTransactionTrace, type TransactionTrace } from "./transactionTrace";
+import { getRuntimeConfig } from "./config";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 // @cf/meta/llama-3.1-8b-instruct was deprecated by Cloudflare (2026-05-30);
 // -fp8 is the closest available replacement (same 8B model, fp8-quantized)
 // per `wrangler ai models` against the live catalog.
 const GENERATION_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
-const TOP_K = 5;
+
+const HARD_FAIL_MESSAGE =
+  "I don't have enough information in the indexed documents (or the web) to answer that question.";
 
 const SYSTEM_PROMPT = `You are a helpful research assistant and teacher for 16-17 year old students.
 
@@ -30,8 +33,8 @@ async function recordTransaction(env: Env, trace: TransactionTrace): Promise<voi
       `INSERT INTO transactions
         (timestamp, question, provider, model, path_taken, confidence, retrieval_json,
          llm_input, llm_output, jev_input_json, jev_output_json, input_tokens, output_tokens,
-         jev_cost_usd, llm_cost_usd)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         jev_cost_usd, llm_cost_usd, jev_model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         trace.timestamp,
@@ -48,7 +51,8 @@ async function recordTransaction(env: Env, trace: TransactionTrace): Promise<voi
         trace.inputTokens,
         trace.outputTokens,
         trace.jevCostUsd,
-        trace.llmCostUsd
+        trace.llmCostUsd,
+        trace.jevModel
       )
       .run();
   } catch (err) {
@@ -64,7 +68,9 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     return Response.json({ error: "Expected JSON body with a 'question' field" }, { status: 400 });
   }
 
-  if (env.GUARDRAIL_ENABLED === "true") {
+  const config = await getRuntimeConfig(env);
+
+  if (config.guardrailEnabled) {
     const decision = await checkQueryInScopeAndAgeAppropriate(question, env.AI);
     if (!decision.allowed) {
       const status = decision.reason === "guardrail_error" ? 503 : 200;
@@ -79,7 +85,7 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     const embedResponse = await env.AI.run(EMBEDDING_MODEL, { text: [question] });
     const questionVector = (embedResponse as { data: number[][] }).data[0];
 
-    const matches = await env.VECTORIZE.query(questionVector, { topK: TOP_K, returnMetadata: true });
+    const matches = await env.VECTORIZE.query(questionVector, { topK: config.topK, returnMetadata: true });
     const retrieved: RetrievedChunk[] = matches.matches.map((m) => ({
       text: String(m.metadata?.text ?? ""),
       page: Number(m.metadata?.page ?? 0),
@@ -91,7 +97,7 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
 
     const reranked = await rerank(question, retrieved, workersAiScoreFn(env.AI));
 
-    const jevEnabled = env.JEV_ENABLED === "true";
+    const jevEnabled = config.jevEnabled;
     const jevResult = jevEnabled
       ? await scoreChunksWithJev(question, reranked, env.OPENROUTER_API_KEY)
       : {
@@ -104,11 +110,17 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     // scores. If JEV failed, jevResult.chunks all carry jevRelevance=null -
     // filtering on that would discard every chunk, which is worse than not
     // running JEV at all.
-    const docSources = jevEnabled && jevResult.success ? filterJevScored(jevResult.chunks) : jevResult.chunks;
-    const keptKeys = new Set(docSources.map((c) => `${c.source}::${c.chunkId}`));
+    const jevDocSources = jevEnabled && jevResult.success ? filterJevScored(jevResult.chunks) : jevResult.chunks;
+    const keptKeys = new Set(jevDocSources.map((c) => `${c.source}::${c.chunkId}`));
+
+    // Confidence gate: even a JEV-kept chunk can be too weak a match to
+    // trust. Uses >= so the default threshold of 0 never changes behavior.
+    const topConfidence = jevDocSources[0] ? jevDocSources[0].rerankScore ?? jevDocSources[0].cosineScore : null;
+    const passesConfidenceGate = topConfidence === null || topConfidence >= config.confidenceThreshold;
+    const docSources = passesConfidenceGate ? jevDocSources : [];
 
     let webSources: Awaited<ReturnType<typeof webSearch>> = [];
-    if (docSources.length === 0) {
+    if (docSources.length === 0 && config.webSearchMode !== "rag_only") {
       webSources = await webSearch(question);
     }
 
@@ -117,13 +129,20 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     const context = [documentContext, webContext].filter(Boolean).join("\n\n---\n\n") || "No context found.";
     const llmInput = `Question: ${question}\n\nContext:\n${context}`;
 
-    const generateResponse = await env.AI.run(GENERATION_MODEL, {
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: llmInput },
-      ],
-    });
-    const answer = (generateResponse as { response: string }).response;
+    const jevModel = jevEnabled ? JEV_MODEL_ID : null;
+
+    let answer: string;
+    if (config.hardFailNoDocument && docSources.length === 0 && webSources.length === 0) {
+      answer = HARD_FAIL_MESSAGE;
+    } else {
+      const generateResponse = await env.AI.run(GENERATION_MODEL, {
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: llmInput },
+        ],
+      });
+      answer = (generateResponse as { response: string }).response;
+    }
 
     const trace = buildTransactionTrace({
       question,
@@ -135,6 +154,7 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
       llmInput,
       llmOutput: answer,
       jevEnabled,
+      jevModel,
       jevCostUsd: jevResult.costUsd,
     });
     ctx.waitUntil(recordTransaction(env, trace));
