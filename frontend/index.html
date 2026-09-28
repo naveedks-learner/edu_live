@@ -7,17 +7,24 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main>
-    <h1>Edukripa</h1>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <h1>Edukripa</h1>
+      <p class="app-subtitle">Ask questions about your uploaded notes.</p>
+    </div>
+  </header>
 
-    <section id="upload-section">
+  <main class="app-main">
+    <section class="card" id="upload-section">
       <h2>Upload notes (PDF)</h2>
-      <input type="file" id="file-input" accept="application/pdf" />
-      <button id="upload-btn">Upload</button>
-      <p id="upload-status"></p>
+      <div class="upload-row">
+        <input type="file" id="file-input" accept="application/pdf" />
+        <button id="upload-btn">Upload</button>
+      </div>
+      <p id="upload-status" class="status-text"></p>
     </section>
 
-    <section id="chat-section">
+    <section class="card" id="chat-section">
       <h2>Ask a question</h2>
       <div id="chat-log"></div>
       <form id="chat-form">

@@ -40,6 +40,8 @@ uploadBtn.addEventListener("click", async () => {
   }
 });
 
+const THINKING_PHRASES = ["Thinking", "Searching your notes", "Checking sources", "Composing an answer"];
+
 chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const question = questionInput.value.trim();
@@ -50,6 +52,13 @@ chatForm.addEventListener("submit", async (event) => {
   const submitBtn = chatForm.querySelector("button[type=submit]");
   submitBtn.disabled = true;
 
+  const thinkingEl = appendMessage("assistant", `${THINKING_PHRASES[0]}...`, { thinking: true });
+  let phraseIndex = 0;
+  const timer = setInterval(() => {
+    phraseIndex = (phraseIndex + 1) % THINKING_PHRASES.length;
+    thinkingEl.textContent = `${THINKING_PHRASES[phraseIndex]}...`;
+  }, 1200);
+
   try {
     const response = await fetch(`${WORKER_URL}/chat`, {
       method: "POST",
@@ -58,18 +67,22 @@ chatForm.addEventListener("submit", async (event) => {
     });
     const result = await response.json();
 
-    appendMessage("assistant", result.answer ?? `Error: ${result.error}`);
+    thinkingEl.classList.remove("thinking");
+    thinkingEl.textContent = result.answer ?? `Error: ${result.error}`;
   } catch (err) {
-    appendMessage("assistant", `Error: could not reach the server (${err.message})`);
+    thinkingEl.classList.remove("thinking");
+    thinkingEl.textContent = `Error: could not reach the server (${err.message})`;
   } finally {
+    clearInterval(timer);
     submitBtn.disabled = false;
   }
 });
 
-function appendMessage(role, text) {
+function appendMessage(role, text, { thinking = false } = {}) {
   const el = document.createElement("div");
-  el.className = `message ${role}`;
+  el.className = `message ${role}${thinking ? " thinking" : ""}`;
   el.textContent = text;
   chatLog.appendChild(el);
   chatLog.scrollTop = chatLog.scrollHeight;
+  return el;
 }

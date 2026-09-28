@@ -1,7 +1,82 @@
-body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
-#chat-log { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; min-height: 200px; margin-bottom: 1rem; }
-.message { margin-bottom: 0.75rem; }
-.message.user { font-weight: bold; }
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --border: #e2e4ea;
+  --text: #1a1d29;
+  --text-muted: #666a7a;
+  --brand-start: #4f46e5;
+  --brand-end: #14b8a6;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20, 20, 40, 0.08), 0 1px 2px rgba(20, 20, 40, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-header {
+  background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
+  color: white;
+  padding: 2rem 1.5rem;
+}
+.app-header-inner { max-width: 720px; margin: 0 auto; }
+.app-header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.app-subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+
+.app-main { max-width: 720px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+.card h2 { margin-top: 0; font-size: 1.1rem; }
+
+.upload-row { display: flex; gap: 0.5rem; align-items: center; }
+.upload-row input[type="file"] { flex: 1; font-size: 0.9rem; }
+.status-text { font-size: 0.85rem; color: var(--text-muted); min-height: 1.2em; }
+
+button {
+  background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
+  color: white;
+  border: none;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: default; }
+
+#chat-log {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  min-height: 220px;
+  max-height: 420px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  background: #fafafc;
+}
+.message { margin-bottom: 0.85rem; max-width: 85%; }
+.message.user { font-weight: 600; margin-left: auto; text-align: right; color: var(--brand-start); }
 .message.assistant { white-space: pre-wrap; }
+.message.assistant.thinking { color: var(--text-muted); font-style: italic; }
+
 #chat-form { display: flex; gap: 0.5rem; }
-#question-input { flex: 1; padding: 0.5rem; }
+#question-input {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .app-main { padding: 1rem; }
+}
