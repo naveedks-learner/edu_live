@@ -4,6 +4,8 @@ import {
   handleAdminDocuments,
   handleAdminTransactions,
   handleAdminCosting,
+  handleAdminGetConfig,
+  handleAdminPutConfig,
 } from "../src/admin";
 import type { Env } from "../src/index";
 
@@ -264,5 +266,76 @@ describe("handleAdminCosting", () => {
 
     expect(response.status).toBe(200);
     expect(body.range).toBe("1d");
+  });
+});
+
+describe("handleAdminGetConfig", () => {
+  it("returns the current effective config", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: { prepare: () => ({ all: async () => ({ results: [{ key: "topK", value: "8" }] }) }) } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminGetConfig(env);
+    const body = (await response.json()) as { config: { topK: number } };
+
+    expect(body.config.topK).toBe(8);
+  });
+});
+
+describe("handleAdminPutConfig", () => {
+  it("rejects an invalid update without writing anything", async () => {
+    let wrote = false;
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          all: async () => ({ results: [] }),
+          bind: () => ({ run: async () => { wrote = true; } }),
+        }),
+        batch: async () => { wrote = true; return []; },
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const request = new Request("https://worker.example/admin/config", {
+      method: "PUT",
+      body: JSON.stringify({ topK: -1 }),
+    });
+    const response = await handleAdminPutConfig(request, env);
+
+    expect(response.status).toBe(400);
+    expect(wrote).toBe(false);
+  });
+
+  it("rejects a non-object body", async () => {
+    const env = makeEnv();
+    const request = new Request("https://worker.example/admin/config", { method: "PUT", body: "not json" });
+    const response = await handleAdminPutConfig(request, env);
+    expect(response.status).toBe(400);
+  });
+
+  it("writes a valid update and returns the resulting config", async () => {
+    const written: unknown[][] = [];
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          all: async () => ({ results: [{ key: "topK", value: "7" }] }),
+          bind: (...args: unknown[]) => ({ __boundArgs: args }),
+        }),
+        batch: async (statements: { __boundArgs: unknown[] }[]) => {
+          written.push(...statements.map((s) => s.__boundArgs));
+          return [];
+        },
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const request = new Request("https://worker.example/admin/config", {
+      method: "PUT",
+      body: JSON.stringify({ topK: 7 }),
+    });
+    const response = await handleAdminPutConfig(request, env);
+    const body = (await response.json()) as { config: { topK: number } };
+
+    expect(response.status).toBe(200);
+    expect(written.length).toBe(1);
+    expect(body.config.topK).toBe(7);
   });
 });

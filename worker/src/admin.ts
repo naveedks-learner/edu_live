@@ -1,4 +1,5 @@
 import type { Env } from "./index";
+import { getRuntimeConfig, setRuntimeConfig, validateConfigUpdate } from "./config";
 
 export function isAdminAuthorized(request: Request, env: Env): boolean {
   if (!env.ADMIN_API_KEY) return true;
@@ -96,5 +97,34 @@ export async function handleAdminCosting(request: Request, env: Env): Promise<Re
     return Response.json({ range, lastTransaction: lastTransaction ?? null, summary });
   } catch (err) {
     return adminErrorResponse("/admin/costing", err);
+  }
+}
+
+export async function handleAdminGetConfig(env: Env): Promise<Response> {
+  try {
+    const config = await getRuntimeConfig(env);
+    return Response.json({ config });
+  } catch (err) {
+    return adminErrorResponse("/admin/config", err);
+  }
+}
+
+export async function handleAdminPutConfig(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return Response.json({ error: "Expected a JSON object body" }, { status: 400 });
+    }
+
+    const errors = validateConfigUpdate(body);
+    if (errors.length > 0) {
+      return Response.json({ error: "Invalid config update", details: errors }, { status: 400 });
+    }
+
+    await setRuntimeConfig(env, body);
+    const config = await getRuntimeConfig(env);
+    return Response.json({ config });
+  } catch (err) {
+    return adminErrorResponse("/admin/config", err);
   }
 }

@@ -39,4 +39,9 @@ describe("withCors GET support", () => {
     expect(allowed).toContain("x-admin-key");
     expect(allowed).toContain("x-ingest-key");
   });
+
+  it("allows PUT alongside GET and POST", () => {
+    const response = withCors(Response.json({ ok: true }));
+    expect(response.headers.get("Access-Control-Allow-Methods")).toContain("PUT");
+  });
 });

@@ -1,7 +1,14 @@
 import { handleIngest } from "./ingestion";
 import { handleChat } from "./chat";
 import { withCors, handleCorsPreflight } from "./cors";
-import { isAdminAuthorized, handleAdminDocuments, handleAdminTransactions, handleAdminCosting } from "./admin";
+import {
+  isAdminAuthorized,
+  handleAdminDocuments,
+  handleAdminTransactions,
+  handleAdminCosting,
+  handleAdminGetConfig,
+  handleAdminPutConfig,
+} from "./admin";
 
 export interface Env {
   AI: Ai;
@@ -45,6 +52,14 @@ export default {
     if (request.method === "GET" && url.pathname === "/admin/costing") {
       if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
       return withCors(await handleAdminCosting(request, env));
+    }
+    if (request.method === "GET" && url.pathname === "/admin/config") {
+      if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
+      return withCors(await handleAdminGetConfig(env));
+    }
+    if (request.method === "PUT" && url.pathname === "/admin/config") {
+      if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
+      return withCors(await handleAdminPutConfig(request, env));
     }
 
     return withCors(new Response("Not found", { status: 404 }));
