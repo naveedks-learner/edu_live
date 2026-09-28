@@ -38,26 +38,49 @@ async function loadDocumentsTab() {
   const el = document.getElementById("tab-documents");
   renderLoading(el);
   try {
-    const { documents } = await fetchAdmin("/admin/documents");
+    const { documents, chunkPreviewCount } = await fetchAdmin("/admin/documents");
     if (documents.length === 0) {
       el.innerHTML = `<div class="card empty-state">No documents indexed yet.</div>`;
       return;
     }
+
+    const totalChunks = documents.reduce((sum, d) => sum + (d.chunkCount ?? 0), 0);
+
     const rows = documents
-      .map(
-        (doc) => `
+      .map((doc) => {
+        const chunkSection = doc.chunks
+          ? `<details class="io-block chunk-preview">
+               <summary>View ${doc.chunks.length} chunk(s)</summary>
+               ${doc.chunks
+                 .map(
+                   (c) => `<div class="chunk-item"><div class="chunk-meta">Chunk ${c.chunkId} · page ${c.page}</div><pre>${escapeHtml(c.text)}</pre></div>`
+                 )
+                 .join("")}
+             </details>`
+          : `<span class="txn-meta">Chunks not shown for this document</span>`;
+
+        return `
         <tr>
           <td>${escapeHtml(doc.name)}</td>
           <td>${(doc.sizeBytes / 1024).toFixed(1)} KB</td>
           <td>${doc.indexedAt ? new Date(doc.indexedAt).toLocaleString() : "—"}</td>
           <td>${doc.pageCount ?? "—"}</td>
           <td>${doc.chunkCount ?? "—"}</td>
-        </tr>`
-      )
+        </tr>
+        <tr class="chunk-row"><td colspan="5">${chunkSection}</td></tr>`;
+      })
       .join("");
+
     el.innerHTML = `
       <div class="card">
+        <div class="metric-row">
+          <div class="metric"><div class="label">Documents</div><div class="value">${documents.length}</div></div>
+          <div class="metric"><div class="label">Total chunks</div><div class="value">${totalChunks}</div></div>
+        </div>
+      </div>
+      <div class="card">
         <h2>Indexed documents</h2>
+        <p class="txn-meta">Chunk text shown for the ${chunkPreviewCount ?? 0} most recently indexed document(s) only.</p>
         <table>
           <thead><tr><th>File</th><th>Size</th><th>Indexed</th><th>Pages</th><th>Chunks</th></tr></thead>
           <tbody>${rows}</tbody>

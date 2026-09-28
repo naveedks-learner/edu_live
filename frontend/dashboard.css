@@ -179,3 +179,19 @@ details.io-block pre {
   font-size: 0.9rem;
   cursor: pointer;
 }
+
+.chunk-row td { padding-top: 0; padding-bottom: 0.75rem; border-bottom: none; }
+.chunk-preview { margin-top: 0.4rem; }
+.chunk-item { margin: 0.5rem 0; }
+.chunk-item .chunk-meta { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+.chunk-item pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fafafc;
+  padding: 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  max-height: 200px;
+  overflow: auto;
+  margin: 0;
+}
