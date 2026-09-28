@@ -44,6 +44,15 @@ describe("validateConfigUpdate", () => {
     expect(validateConfigUpdate({ topK: 2.5 }).length).toBeGreaterThan(0);
   });
 
+  it("rejects a topK above the sane upper bound, to stop one bad save from 502-ing every chat request", () => {
+    expect(validateConfigUpdate({ topK: 1000 }).length).toBeGreaterThan(0);
+    expect(validateConfigUpdate({ topK: 50 })).toEqual([]);
+  });
+
+  it("rejects an unrecognized config key so a typo can't silently write garbage", () => {
+    expect(validateConfigUpdate({ topk: 10 }).length).toBeGreaterThan(0);
+  });
+
   it("rejects a confidenceThreshold outside [0,1]", () => {
     expect(validateConfigUpdate({ confidenceThreshold: -0.1 }).length).toBeGreaterThan(0);
     expect(validateConfigUpdate({ confidenceThreshold: 1.1 }).length).toBeGreaterThan(0);

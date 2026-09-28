@@ -111,13 +111,21 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     // filtering on that would discard every chunk, which is worse than not
     // running JEV at all.
     const jevDocSources = jevEnabled && jevResult.success ? filterJevScored(jevResult.chunks) : jevResult.chunks;
-    const keptKeys = new Set(jevDocSources.map((c) => `${c.source}::${c.chunkId}`));
 
     // Confidence gate: even a JEV-kept chunk can be too weak a match to
-    // trust. Uses >= so the default threshold of 0 never changes behavior.
+    // trust. The reranker's score scale is not guaranteed to be
+    // non-negative (it may return raw cross-encoder logits), so a
+    // threshold of 0 (the default) skips the gate entirely rather than
+    // comparing with >= - that guarantees the default never changes
+    // existing behavior regardless of the underlying score range.
     const topConfidence = jevDocSources[0] ? jevDocSources[0].rerankScore ?? jevDocSources[0].cosineScore : null;
-    const passesConfidenceGate = topConfidence === null || topConfidence >= config.confidenceThreshold;
+    const passesConfidenceGate =
+      config.confidenceThreshold <= 0 || topConfidence === null || topConfidence >= config.confidenceThreshold;
     const docSources = passesConfidenceGate ? jevDocSources : [];
+    // keptKeys drives the dashboard's kept/discarded status per chunk - it
+    // must reflect what actually survived ALL gates (JEV + confidence), or
+    // a chunk the confidence gate just dropped would still show as "kept".
+    const keptKeys = new Set(docSources.map((c) => `${c.source}::${c.chunkId}`));
 
     let webSources: Awaited<ReturnType<typeof webSearch>> = [];
     if (docSources.length === 0 && config.webSearchMode !== "rag_only") {

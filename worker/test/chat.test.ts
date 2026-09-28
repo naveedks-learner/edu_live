@@ -122,6 +122,33 @@ describe("handleChat JEV failure handling", () => {
 });
 
 describe("handleChat runtime config", () => {
+  it("never gates on confidence when confidenceThreshold is 0 (the default), even for a negative rerank score", async () => {
+    // The reranker's score scale is not guaranteed to be non-negative (it
+    // may return raw cross-encoder logits) - the default threshold must be
+    // a true no-op regardless, or shipping this feature could silently
+    // change today's behavior for existing queries.
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [{ id: 0, score: -5 }] };
+          return { response: "an answer" };
+        },
+      },
+      VECTORIZE: {
+        query: async () => ({
+          matches: [{ score: 0.5, metadata: { text: "passage", page: 1, pageEnd: 1, source: "notes.pdf", chunkId: 0 } }],
+        }),
+      },
+    });
+
+    const response = await handleChat(makeChatRequest("what is reflection of light"), env, noopCtx());
+    const body = (await response.json()) as { docSources: unknown[] };
+
+    expect(response.status).toBe(200);
+    expect(body.docSources.length).toBe(1);
+  });
+
   it("falls back to web search when the top confidence is below confidenceThreshold, even with a kept chunk", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (input: RequestInfo | URL) => {
@@ -201,6 +228,58 @@ describe("handleChat runtime config", () => {
     expect(response.status).toBe(200);
     expect(generationCalled).toBe(false);
     expect(body.answer).toMatch(/don't have enough information/i);
+  });
+
+  it("still records a transaction trace when hardFailNoDocument short-circuits generation", async () => {
+    const inserted: unknown[] = [];
+    const env = makeEnv(
+      {
+        EDU_LIVE_DB: makeMockDb(
+          [...DEFAULT_TEST_ROWS, { key: "webSearchMode", value: "rag_only" }, { key: "hardFailNoDocument", value: "true" }],
+          (args) => inserted.push(args)
+        ),
+        VECTORIZE: { query: async () => ({ matches: [] }) },
+      },
+      []
+    );
+    const tasks: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => tasks.push(p) } as unknown as ExecutionContext;
+
+    const response = await handleChat(makeChatRequest("what is reflection of light"), env, ctx);
+    await Promise.all(tasks);
+
+    expect(response.status).toBe(200);
+    expect(inserted.length).toBe(1);
+  });
+});
+
+describe("handleChat retrieval status accuracy", () => {
+  it("marks a chunk as discarded, not kept, when the confidence gate drops it after JEV kept it", async () => {
+    const inserted: unknown[] = [];
+    const env = makeEnv(
+      {
+        EDU_LIVE_DB: makeMockDb(
+          [...DEFAULT_TEST_ROWS, { key: "confidenceThreshold", value: "0.99" }],
+          (args) => inserted.push(args)
+        ),
+        VECTORIZE: {
+          query: async () => ({
+            matches: [{ score: 0.5, metadata: { text: "passage", page: 1, pageEnd: 1, source: "notes.pdf", chunkId: 0 } }],
+          }),
+        },
+      },
+      []
+    );
+    const tasks: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => tasks.push(p) } as unknown as ExecutionContext;
+
+    await handleChat(makeChatRequest("what is reflection of light"), env, ctx);
+    await Promise.all(tasks);
+
+    expect(inserted.length).toBe(1);
+    const retrievalJson = inserted[0][6] as string; // 7th bound param is retrieval_json
+    const retrieval = JSON.parse(retrievalJson) as { status: string }[];
+    expect(retrieval[0].status).toBe("discarded");
   });
 });
 

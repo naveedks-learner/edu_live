@@ -40,13 +40,33 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
   };
 }
 
+const KNOWN_FIELDS = new Set([
+  "topK",
+  "confidenceThreshold",
+  "webSearchMode",
+  "hardFailNoDocument",
+  "jevEnabled",
+  "guardrailEnabled",
+]);
+
+// Cloudflare Vectorize rejects a query above its own topK ceiling, and a
+// value that large would also multiply paid JEV calls per question - this
+// cap stops one bad save from breaking every /chat request until reverted.
+const MAX_TOP_K = 50;
+
 export function validateConfigUpdate(input: Record<string, unknown>): { field: string; message: string }[] {
   const errors: { field: string; message: string }[] = [];
 
+  for (const field of Object.keys(input)) {
+    if (!KNOWN_FIELDS.has(field)) {
+      errors.push({ field, message: `Unrecognized config field: ${field}` });
+    }
+  }
+
   if ("topK" in input) {
     const v = input.topK;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
-      errors.push({ field: "topK", message: "topK must be a positive integer" });
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > MAX_TOP_K) {
+      errors.push({ field: "topK", message: `topK must be a positive integer no greater than ${MAX_TOP_K}` });
     }
   }
   if ("confidenceThreshold" in input) {
