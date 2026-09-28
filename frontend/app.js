@@ -1,4 +1,4 @@
-const WORKER_URL = "http://localhost:8787"; // replace with the deployed Worker URL
+const WORKER_URL = "https://edu-live-worker.naveed-ks.workers.dev";
 
 const fileInput = document.getElementById("file-input");
 const uploadBtn = document.getElementById("upload-btn");

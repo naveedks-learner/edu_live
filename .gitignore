@@ -20,3 +20,6 @@ observability.db
 worker/node_modules/
 worker/.wrangler/
 worker/dist/
+
+# Cloudflare Pages (frontend)
+frontend/.wrangler/
