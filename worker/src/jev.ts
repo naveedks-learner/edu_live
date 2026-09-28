@@ -11,19 +11,26 @@ const JEV_MODEL = "~typesafe/jev-latest";
 // 4 levels so "score" (0-indexed) lands in [0,3], matching DEFAULT_REL_MIN=2.
 const RELEVANCE_CRITERIA = ["Not relevant", "Low relevance", "Relevant", "Highly relevant"];
 
-export function filterByJevScores(
+/**
+ * Tags every candidate with its JEV scores without dropping any - callers
+ * that need the full picture (e.g. the observability dashboard, which shows
+ * discarded chunks alongside kept ones) use this directly; callers that
+ * just want the surviving chunks compose it with filterJevScored below.
+ */
+export function annotateWithJevScores(
   chunks: RerankedChunk[],
   scores: { relevance: number; injection: number }[],
-  relMin: number = DEFAULT_REL_MIN,
   injMax: number = DEFAULT_INJ_MAX
 ): JevScoredChunk[] {
-  return chunks
-    .map((chunk, i) => ({
-      ...chunk,
-      jevRelevance: scores[i]?.relevance ?? null,
-      jevBlocked: (scores[i]?.injection ?? 0) >= injMax,
-    }))
-    .filter((c) => (c.jevRelevance ?? 0) >= relMin && !c.jevBlocked);
+  return chunks.map((chunk, i) => ({
+    ...chunk,
+    jevRelevance: scores[i]?.relevance ?? null,
+    jevBlocked: (scores[i]?.injection ?? 0) >= injMax,
+  }));
+}
+
+export function filterJevScored(chunks: JevScoredChunk[], relMin: number = DEFAULT_REL_MIN): JevScoredChunk[] {
+  return chunks.filter((c) => (c.jevRelevance ?? 0) >= relMin && !c.jevBlocked);
 }
 
 /**
@@ -31,12 +38,14 @@ export function filterByJevScores(
  * TypeSafe Jev model). JEV takes one "state" string and a typed set of
  * questions per call - there's no batch endpoint, so each candidate chunk
  * gets its own request (bounded by top_k, so at most a handful per query).
+ * costUsd reads OpenRouter's optional per-call usage.cost field when
+ * present; callers must not assume a nonzero value is always available.
  */
 async function scoreChunkWithJev(
   query: string,
   chunkText: string,
   apiKey: string
-): Promise<{ relevance: number; injection: number }> {
+): Promise<{ relevance: number; injection: number; costUsd: number }> {
   const response = await fetch("https://openrouter.ai/api/alpha/decisions", {
     method: "POST",
     headers: {
@@ -68,30 +77,40 @@ async function scoreChunkWithJev(
 
   const body = (await response.json()) as {
     answers: { relevance: { score: number }; injection: { noul: number } };
+    usage?: { cost?: number };
   };
 
-  return { relevance: body.answers.relevance.score, injection: body.answers.injection.noul };
+  return {
+    relevance: body.answers.relevance.score,
+    injection: body.answers.injection.noul,
+    costUsd: body.usage?.cost ?? 0,
+  };
 }
 
 /**
- * Calls JEV to score each retrieved chunk's relevance to the query and
- * probe for injected instructions. Never throws - on any failure (network
- * error, bad response, JEV disabled) returns every input chunk unfiltered
- * with jevRelevance=null, jevBlocked=false, so callers degrade to "JEV
- * didn't run" rather than losing the whole request.
+ * Calls JEV to score every retrieved chunk's relevance to the query and
+ * probe for injected instructions. Returns ALL chunks annotated (never
+ * filters) so callers can show discarded chunks too. Never throws - on any
+ * failure (network error, bad response) returns every input chunk
+ * unfiltered with jevRelevance=null, jevBlocked=false, costUsd=0, so
+ * callers degrade to "JEV didn't run" rather than losing the whole request.
  */
-export async function callJev(
+export async function scoreChunksWithJev(
   query: string,
   chunks: RerankedChunk[],
   apiKey: string
-): Promise<JevScoredChunk[]> {
-  if (chunks.length === 0) return [];
+): Promise<{ chunks: JevScoredChunk[]; costUsd: number }> {
+  if (chunks.length === 0) return { chunks: [], costUsd: 0 };
 
   try {
     const scores = await Promise.all(chunks.map((c) => scoreChunkWithJev(query, c.text, apiKey)));
-    return filterByJevScores(chunks, scores);
+    const costUsd = scores.reduce((sum, s) => sum + s.costUsd, 0);
+    return { chunks: annotateWithJevScores(chunks, scores), costUsd };
   } catch (err) {
     console.error("JEV call failed, passing chunks through unfiltered", err);
-    return chunks.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false }));
+    return {
+      chunks: chunks.map((c) => ({ ...c, jevRelevance: null, jevBlocked: false })),
+      costUsd: 0,
+    };
   }
 }

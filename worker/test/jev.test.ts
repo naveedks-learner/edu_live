@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterByJevScores } from "../src/jev";
+import { annotateWithJevScores, filterJevScored, scoreChunksWithJev } from "../src/jev";
 import type { RerankedChunk } from "../src/rerank";
 
 const chunks: RerankedChunk[] = [
@@ -8,44 +8,68 @@ const chunks: RerankedChunk[] = [
   { text: "hostile injection attempt", page: 3, pageEnd: 3, source: "a.pdf", chunkId: 2, cosineScore: 0.5, rerankScore: 0.3 },
 ];
 
-describe("filterByJevScores", () => {
-  it("keeps chunks at/above the relevance threshold and below the injection threshold", () => {
+describe("annotateWithJevScores", () => {
+  it("tags every chunk without dropping any, using the injection threshold to set jevBlocked", () => {
     const scores = [
       { relevance: 2.5, injection: 0.1 },
       { relevance: 1.0, injection: 0.1 },
       { relevance: 2.0, injection: 0.9 },
     ];
 
-    const result = filterByJevScores(chunks, scores, 2, 0.5);
+    const result = annotateWithJevScores(chunks, scores, 0.5);
 
-    expect(result.map((c) => c.text)).toEqual(["relevant"]);
-  });
-
-  it("uses the default thresholds (relMin=2, injMax=0.5) when not specified", () => {
-    const scores = [
-      { relevance: 2.0, injection: 0.1 },
-      { relevance: 1.9, injection: 0.1 },
-    ];
-
-    const result = filterByJevScores(chunks.slice(0, 2), scores);
-
-    expect(result.map((c) => c.text)).toEqual(["relevant"]);
+    expect(result.length).toBe(3);
+    expect(result[0]).toMatchObject({ jevRelevance: 2.5, jevBlocked: false });
+    expect(result[1]).toMatchObject({ jevRelevance: 1.0, jevBlocked: false });
+    expect(result[2]).toMatchObject({ jevRelevance: 2.0, jevBlocked: true });
   });
 });
 
-describe("callJev", () => {
-  it("passes chunks through unfiltered (not dropped) when the JEV request fails", async () => {
+describe("filterJevScored", () => {
+  it("keeps only chunks at/above relMin and not blocked", () => {
+    const annotated = annotateWithJevScores(
+      chunks,
+      [
+        { relevance: 2.5, injection: 0.1 },
+        { relevance: 1.0, injection: 0.1 },
+        { relevance: 2.0, injection: 0.9 },
+      ],
+      0.5
+    );
+
+    const result = filterJevScored(annotated, 2);
+
+    expect(result.map((c) => c.text)).toEqual(["relevant"]);
+  });
+
+  it("uses the default relMin (2) when not specified", () => {
+    const annotated = annotateWithJevScores(chunks.slice(0, 2), [
+      { relevance: 2.0, injection: 0.1 },
+      { relevance: 1.9, injection: 0.1 },
+    ]);
+
+    expect(filterJevScored(annotated).map((c) => c.text)).toEqual(["relevant"]);
+  });
+});
+
+describe("scoreChunksWithJev", () => {
+  it("returns every chunk annotated (not filtered) and never throws when the JEV request fails", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => { throw new Error("network unreachable"); };
 
     try {
-      const { callJev } = await import("../src/jev");
-      const result = await callJev("query", chunks, "fake-key");
+      const result = await scoreChunksWithJev("query", chunks, "fake-key");
 
-      expect(result.length).toBe(chunks.length);
-      expect(result.every((c) => c.jevRelevance === null && c.jevBlocked === false)).toBe(true);
+      expect(result.chunks.length).toBe(chunks.length);
+      expect(result.chunks.every((c) => c.jevRelevance === null && c.jevBlocked === false)).toBe(true);
+      expect(result.costUsd).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it("returns an empty result for an empty chunk list without calling fetch", async () => {
+    const result = await scoreChunksWithJev("query", [], "fake-key");
+    expect(result).toEqual({ chunks: [], costUsd: 0 });
   });
 });
