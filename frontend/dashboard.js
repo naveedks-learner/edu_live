@@ -181,12 +181,75 @@ async function loadCostingTab(range = "1d") {
   }
 }
 
+// --- Tab: Settings ---
+
+async function loadSettingsTab() {
+  const el = document.getElementById("tab-settings");
+  renderLoading(el);
+  try {
+    const { config } = await fetchAdmin("/admin/config");
+    el.innerHTML = `
+      <div class="card">
+        <h2>Runtime settings</h2>
+        <p class="txn-meta">Changes apply to the next question asked - Cloudflare Workers have no long-running process to restart.</p>
+        <form id="settings-form" class="settings-form">
+          <label>Top K chunks retrieved
+            <input type="number" name="topK" min="1" step="1" value="${config.topK}" />
+          </label>
+          <label>Confidence threshold (0-1)
+            <input type="number" name="confidenceThreshold" min="0" max="1" step="0.01" value="${config.confidenceThreshold}" />
+          </label>
+          <fieldset>
+            <legend>Web search mode</legend>
+            <label><input type="radio" name="webSearchMode" value="rag_only" ${config.webSearchMode === "rag_only" ? "checked" : ""} /> RAG only</label>
+            <label><input type="radio" name="webSearchMode" value="rag_web_fallback" ${config.webSearchMode === "rag_web_fallback" ? "checked" : ""} /> RAG + web fallback</label>
+          </fieldset>
+          <label class="checkbox-row"><input type="checkbox" name="hardFailNoDocument" ${config.hardFailNoDocument ? "checked" : ""} /> Hard fail when no document found</label>
+          <label class="checkbox-row"><input type="checkbox" name="jevEnabled" ${config.jevEnabled ? "checked" : ""} /> JEV relevance filtering enabled</label>
+          <label class="checkbox-row"><input type="checkbox" name="guardrailEnabled" ${config.guardrailEnabled ? "checked" : ""} /> Guardrail enabled</label>
+          <button type="submit">Save</button>
+        </form>
+        <p id="settings-status" class="txn-meta"></p>
+      </div>`;
+
+    document.getElementById("settings-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const status = document.getElementById("settings-status");
+      const update = {
+        topK: Number(form.topK.value),
+        confidenceThreshold: Number(form.confidenceThreshold.value),
+        webSearchMode: form.webSearchMode.value,
+        hardFailNoDocument: form.hardFailNoDocument.checked,
+        jevEnabled: form.jevEnabled.checked,
+        guardrailEnabled: form.guardrailEnabled.checked,
+      };
+      status.textContent = "Saving...";
+      try {
+        const response = await fetch(`${WORKER_URL}/admin/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...adminHeaders() },
+          body: JSON.stringify(update),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+        status.textContent = "Saved - takes effect on the next question.";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      }
+    });
+  } catch (err) {
+    renderError(el, err.message);
+  }
+}
+
 // --- Tab switching ---
 
 const tabLoaders = {
   documents: loadDocumentsTab,
   transactions: loadTransactionsTab,
   costing: () => loadCostingTab(),
+  settings: loadSettingsTab,
 };
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {

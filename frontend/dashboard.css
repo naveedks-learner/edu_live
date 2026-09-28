@@ -162,3 +162,20 @@ details.io-block pre {
   .dash-header-inner { flex-direction: column; align-items: flex-start; }
   table { display: block; overflow-x: auto; }
 }
+
+.settings-form { display: flex; flex-direction: column; gap: 1rem; max-width: 420px; }
+.settings-form label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9rem; color: var(--text-muted); }
+.settings-form input[type="number"] { padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; color: var(--text); }
+.settings-form fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.settings-form fieldset legend { padding: 0 0.4rem; font-size: 0.8rem; color: var(--text-muted); }
+.settings-form .checkbox-row { flex-direction: row; align-items: center; gap: 0.5rem; }
+.settings-form button {
+  align-self: flex-start;
+  background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
+  color: white;
+  border: none;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
