@@ -1,4 +1,5 @@
 import { handleIngest } from "./ingestion";
+import { handleChat } from "./chat";
 
 export interface Env {
   AI: Ai;
@@ -15,6 +16,9 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/ingest") {
       return handleIngest(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/chat") {
+      return handleChat(request, env);
     }
 
     return new Response("Not found", { status: 404 });
