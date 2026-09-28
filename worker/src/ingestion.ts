@@ -73,7 +73,13 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
       }))
     );
 
-    await env.PDF_BUCKET.put(file.name, pdfBytes);
+    await env.PDF_BUCKET.put(file.name, pdfBytes, {
+      customMetadata: {
+        chunkCount: String(chunks.length),
+        pageCount: String(pages.length),
+        indexedAt: new Date().toISOString(),
+      },
+    });
   } catch (err) {
     console.error("Ingestion failed after validation", err);
     return Response.json({ error: "Failed to index this document - please try again" }, { status: 502 });
