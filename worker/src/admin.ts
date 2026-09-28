@@ -1,5 +1,6 @@
 import type { Env } from "./index";
 import { getRuntimeConfig, setRuntimeConfig, validateConfigUpdate } from "./config";
+import { chunkVectorId } from "./vectorId";
 
 export function isAdminAuthorized(request: Request, env: Env): boolean {
   if (!env.ADMIN_API_KEY) return true;
@@ -23,7 +24,35 @@ export async function handleAdminDocuments(env: Env): Promise<Response> {
       pageCount: obj.customMetadata?.pageCount ? Number(obj.customMetadata.pageCount) : null,
     }));
 
-    return Response.json({ documents });
+    const eligible = documents.filter((d) => d.indexedAt && d.chunkCount);
+    const newest = [...eligible].sort((a, b) => (b.indexedAt! > a.indexedAt! ? 1 : -1)).slice(0, 3);
+    const newestNames = new Set(newest.map((d) => d.name));
+
+    const documentsWithChunks = await Promise.all(
+      documents.map(async (doc) => {
+        if (!newestNames.has(doc.name) || !doc.chunkCount) {
+          return { ...doc, chunks: null as { chunkId: number; page: number; text: string }[] | null };
+        }
+        const ids = Array.from({ length: doc.chunkCount }, (_, i) => chunkVectorId(doc.name, i));
+        const idToChunkId = new Map(ids.map((id, i) => [id, i]));
+        try {
+          const vectors = await env.VECTORIZE.getByIds(ids);
+          const chunks = vectors
+            .map((v) => ({
+              chunkId: idToChunkId.get(v.id) ?? 0,
+              page: Number(v.metadata?.page ?? 0),
+              text: String(v.metadata?.text ?? ""),
+            }))
+            .sort((a, b) => a.chunkId - b.chunkId);
+          return { ...doc, chunks };
+        } catch (err) {
+          console.error(`failed to fetch chunk preview for ${doc.name}`, err);
+          return { ...doc, chunks: null as { chunkId: number; page: number; text: string }[] | null };
+        }
+      })
+    );
+
+    return Response.json({ documents: documentsWithChunks, chunkPreviewCount: newest.length });
   } catch (err) {
     return adminErrorResponse("/admin/documents", err);
   }

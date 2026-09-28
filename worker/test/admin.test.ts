@@ -47,7 +47,7 @@ describe("isAdminAuthorized", () => {
 describe("handleAdminDocuments", () => {
   it("returns an empty list when no documents are indexed", async () => {
     const response = await handleAdminDocuments(makeEnv());
-    expect(await response.json()).toEqual({ documents: [] });
+    expect(await response.json()).toEqual({ documents: [], chunkPreviewCount: 0 });
   });
 
   it("requests customMetadata from R2, without which real buckets omit it from list results", async () => {
@@ -122,6 +122,72 @@ describe("handleAdminDocuments", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toHaveProperty("error");
+  });
+
+  it("includes chunk previews only for the 3 most-recently-indexed documents", async () => {
+    const docs = [
+      { key: "oldest.pdf", size: 100, customMetadata: { chunkCount: "2", pageCount: "1", indexedAt: "2026-09-24T00:00:00.000Z" } },
+      { key: "second.pdf", size: 100, customMetadata: { chunkCount: "1", pageCount: "1", indexedAt: "2026-09-25T00:00:00.000Z" } },
+      { key: "third.pdf", size: 100, customMetadata: { chunkCount: "1", pageCount: "1", indexedAt: "2026-09-26T00:00:00.000Z" } },
+      { key: "newest.pdf", size: 100, customMetadata: { chunkCount: "1", pageCount: "1", indexedAt: "2026-09-27T00:00:00.000Z" } },
+    ];
+    const requestedIds: string[] = [];
+    const env = makeEnv({
+      PDF_BUCKET: { list: async () => ({ objects: docs }) } as unknown as Env["PDF_BUCKET"],
+      VECTORIZE: {
+        getByIds: async (ids: string[]) => {
+          requestedIds.push(...ids);
+          return ids.map((id) => ({ id, metadata: { page: 1, text: `text for ${id}` } }));
+        },
+      } as unknown as Env["VECTORIZE"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { name: string; chunks: unknown[] | null }[] };
+
+    const byName = Object.fromEntries(body.documents.map((d) => [d.name, d.chunks]));
+    expect(byName["oldest.pdf"]).toBeNull();
+    expect(byName["second.pdf"]).not.toBeNull();
+    expect(byName["third.pdf"]).not.toBeNull();
+    expect(byName["newest.pdf"]).not.toBeNull();
+  });
+
+  it("renders whatever chunks getByIds actually returns, even if fewer than chunkCount", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [{ key: "recent.pdf", size: 100, customMetadata: { chunkCount: "3", pageCount: "1", indexedAt: "2026-09-28T00:00:00.000Z" } }],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+      VECTORIZE: {
+        getByIds: async (ids: string[]) => [{ id: ids[0], metadata: { page: 1, text: "only chunk 0 exists" } }],
+      } as unknown as Env["VECTORIZE"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { chunks: { chunkId: number; text: string }[] }[] };
+
+    expect(body.documents[0].chunks?.length).toBe(1);
+    expect(body.documents[0].chunks?.[0].chunkId).toBe(0);
+  });
+
+  it("falls back to chunks: null for a document if getByIds throws", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [{ key: "recent.pdf", size: 100, customMetadata: { chunkCount: "1", pageCount: "1", indexedAt: "2026-09-28T00:00:00.000Z" } }],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+      VECTORIZE: {
+        getByIds: async () => { throw new Error("Vectorize unavailable"); },
+      } as unknown as Env["VECTORIZE"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { chunks: unknown }[] };
+
+    expect(response.status).toBe(200);
+    expect(body.documents[0].chunks).toBeNull();
   });
 });
 
