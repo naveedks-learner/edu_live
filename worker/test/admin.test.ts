@@ -258,6 +258,32 @@ describe("handleAdminTransactions", () => {
     expect(body.transactions[0].retrieval).toEqual([]);
     expect(body.transactions[0].jevInput).toBeNull();
   });
+
+  it("includes jevModel from the stored row", async () => {
+    const env = makeEnv({
+      EDU_LIVE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            all: async () => ({
+              results: [
+                {
+                  id: 1, timestamp: "t", question: "q", provider: "p", model: "m", path_taken: "pdf_only",
+                  confidence: 0.5, retrieval_json: "[]", llm_input: "in", llm_output: "out",
+                  jev_input_json: null, jev_output_json: null, input_tokens: 1, output_tokens: 1,
+                  jev_cost_usd: 0, llm_cost_usd: 0, jev_model: "~typesafe/jev-latest",
+                },
+              ],
+            }),
+          }),
+        }),
+      } as unknown as Env["EDU_LIVE_DB"],
+    });
+
+    const response = await handleAdminTransactions(req(), env);
+    const body = (await response.json()) as { transactions: { jevModel: string | null }[] };
+
+    expect(body.transactions[0].jevModel).toBe("~typesafe/jev-latest");
+  });
 });
 
 describe("handleAdminCosting", () => {

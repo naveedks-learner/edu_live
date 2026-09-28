@@ -81,6 +81,7 @@ export async function handleAdminTransactions(request: Request, env: Env): Promi
       llmOutput: row.llm_output,
       jevInput: row.jev_input_json ? JSON.parse(row.jev_input_json as string) : null,
       jevOutput: row.jev_output_json ? JSON.parse(row.jev_output_json as string) : null,
+      jevModel: row.jev_model,
       inputTokens: row.input_tokens,
       outputTokens: row.output_tokens,
       jevCostUsd: row.jev_cost_usd,
