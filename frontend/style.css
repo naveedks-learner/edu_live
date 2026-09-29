@@ -1,37 +1,96 @@
 :root {
   --bg: #f5f6fa;
   --surface: #ffffff;
+  --surface-2: #eef0f6;
   --border: #e2e4ea;
   --text: #1a1d29;
   --text-muted: #666a7a;
-  --brand-start: #4f46e5;
+  --brand-start: #7c3aed;
   --brand-end: #14b8a6;
-  --radius: 10px;
+  --radius: 14px;
   --shadow: 0 1px 3px rgba(20, 20, 40, 0.08), 0 1px 2px rgba(20, 20, 40, 0.06);
+  --focus-ring: #7c3aed;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f0f17;
+  --surface: #191925;
+  --surface-2: #22222f;
+  --border: #2e2e3d;
+  --text: #f1f0f7;
+  --text-muted: #9694a8;
+  --brand-start: #a78bfa;
+  --brand-end: #2dd4bf;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --focus-ring: #a78bfa;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f17;
+    --surface: #191925;
+    --surface-2: #22222f;
+    --border: #2e2e3d;
+    --text: #f1f0f7;
+    --text-muted: #9694a8;
+    --brand-start: #a78bfa;
+    --brand-end: #2dd4bf;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+    --focus-ring: #a78bfa;
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: background 0.2s ease, color 0.2s ease;
 }
+
+a { color: var(--brand-start); }
 
 .app-header {
   background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
   color: white;
   padding: 2rem 1.5rem;
 }
-.app-header-inner { max-width: 720px; margin: 0 auto; }
+.app-header-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .app-header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
 .app-subtitle { margin: 0; opacity: 0.9; font-size: 0.95rem; }
+
+.theme-toggle {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: white;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.theme-toggle:hover { background: rgba(255, 255, 255, 0.3); }
+.theme-toggle:active { transform: scale(0.96); }
 
 .app-main { max-width: 720px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
 
 .card {
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1.25rem;
@@ -43,21 +102,29 @@ button {
   color: white;
   border: none;
   padding: 0.55rem 1.25rem;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
 }
-button:disabled { opacity: 0.6; cursor: default; }
+button:hover:not(:disabled) { opacity: 0.9; }
+button:active:not(:disabled) { transform: scale(0.97); }
+button:disabled { opacity: 0.5; cursor: default; }
+button:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
 
 #chat-log {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 1rem;
   min-height: 220px;
   max-height: 420px;
   overflow-y: auto;
   margin-bottom: 1rem;
-  background: #fafafc;
+  background: var(--surface-2);
 }
 .message { margin-bottom: 0.85rem; max-width: 85%; }
 .message.user { font-weight: 600; margin-left: auto; text-align: right; color: var(--brand-start); }
@@ -68,17 +135,26 @@ button:disabled { opacity: 0.6; cursor: default; }
 #answer-style-select {
   padding: 0.6rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.95rem;
+  background: var(--surface);
+  color: var(--text);
 }
 #question-input {
   flex: 1;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.95rem;
+  background: var(--surface);
+  color: var(--text);
 }
 
 @media (max-width: 640px) {
   .app-main { padding: 1rem; }
+  .app-header-inner { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
 }

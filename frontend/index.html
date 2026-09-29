@@ -4,13 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Edukripa</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("edukripa-theme");
+        if (saved) document.documentElement.setAttribute("data-theme", saved);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="app-header">
     <div class="app-header-inner">
-      <h1>Edukripa</h1>
-      <p class="app-subtitle">Ask questions about your uploaded notes.</p>
+      <div>
+        <h1>Edukripa</h1>
+        <p class="app-subtitle">Ask questions about your uploaded notes.</p>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">Theme</button>
     </div>
   </header>
 

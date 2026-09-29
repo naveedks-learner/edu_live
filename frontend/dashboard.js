@@ -1,5 +1,22 @@
 const WORKER_URL = "https://edu-live-worker.naveed-ks.workers.dev";
 
+const THEME_STORAGE_KEY = "edukripa-theme";
+const themeToggle = document.getElementById("theme-toggle");
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") || "auto";
+}
+
+themeToggle.addEventListener("click", () => {
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const isDark = currentTheme() === "dark" || (currentTheme() === "auto" && prefersDark);
+  const next = isDark ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (e) {}
+});
+
 const adminKeyInput = document.getElementById("admin-key-input");
 adminKeyInput.value = localStorage.getItem("edukripa-admin-key") ?? "";
 adminKeyInput.addEventListener("input", () => {

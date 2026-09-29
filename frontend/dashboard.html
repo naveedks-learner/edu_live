@@ -4,7 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Edukripa — Observability</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="dashboard.css" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("edukripa-theme");
+        if (saved) document.documentElement.setAttribute("data-theme", saved);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="dash-header">
@@ -13,9 +22,12 @@
         <h1>Edukripa — RAG Observability</h1>
         <p class="dash-subtitle">Indexed documents, per-query pipeline traces, and token/cost usage.</p>
       </div>
-      <div class="admin-key-field">
-        <label for="admin-key-input">Admin key</label>
-        <input type="password" id="admin-key-input" placeholder="x-admin-key" autocomplete="off" />
+      <div class="header-controls">
+        <div class="admin-key-field">
+          <label for="admin-key-input">Admin key</label>
+          <input type="password" id="admin-key-input" placeholder="x-admin-key" autocomplete="off" />
+        </div>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">Theme</button>
       </div>
     </div>
   </header>

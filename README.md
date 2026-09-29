@@ -80,7 +80,7 @@ then:
 
 ```bash
 cd ../frontend
-npx wrangler pages deploy . --project-name=edu-live-frontend
+npx wrangler deploy
 ```
 
 ## Known follow-ups
