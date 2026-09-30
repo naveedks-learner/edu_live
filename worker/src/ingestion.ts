@@ -3,6 +3,7 @@ import { extractPdfPages } from "./pdf";
 import { chunkText } from "./chunker";
 import { chunkVectorId } from "./vectorId";
 import { enrichPdfToMarkdown } from "./ingestionEnrichment";
+import { capturePageScreenshot } from "./pageScreenshot";
 import { getRuntimeConfig } from "./config";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
@@ -58,6 +59,16 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     pages = await enrichPdfToMarkdown(pdfBytes, pages, env, config);
   }
 
+  const pageImageKeys = new Map<number, string>();
+  const figurePages = pages.filter((p) => p.text.includes("[Figure:")).map((p) => p.page);
+  for (const pageNumber of figurePages) {
+    const screenshot = await capturePageScreenshot(pdfBytes, pageNumber, env);
+    if (!screenshot) continue;
+    const key = `page-images/${file.name}/${pageNumber}.png`;
+    await env.PDF_BUCKET.put(key, screenshot, { httpMetadata: { contentType: "image/png" } });
+    pageImageKeys.set(pageNumber, key);
+  }
+
   const chunks = chunkText(pages, file.name);
 
   try {
@@ -67,17 +78,27 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     const vectors = (embedResponse as { data: number[][] }).data;
 
     await env.VECTORIZE.upsert(
-      chunks.map((chunk, i) => ({
-        id: chunkVectorId(chunk.source, chunk.chunkId),
-        values: vectors[i],
-        metadata: {
-          text: chunk.text,
-          source: chunk.source,
-          page: chunk.page,
-          pageEnd: chunk.pageEnd,
-          chunkId: chunk.chunkId,
-        },
-      }))
+      chunks.map((chunk, i) => {
+        let pageImageKey: string | undefined;
+        for (let p = chunk.page; p <= chunk.pageEnd; p++) {
+          if (pageImageKeys.has(p)) {
+            pageImageKey = pageImageKeys.get(p);
+            break;
+          }
+        }
+        return {
+          id: chunkVectorId(chunk.source, chunk.chunkId),
+          values: vectors[i],
+          metadata: {
+            text: chunk.text,
+            source: chunk.source,
+            page: chunk.page,
+            pageEnd: chunk.pageEnd,
+            chunkId: chunk.chunkId,
+            ...(pageImageKey ? { pageImageKey } : {}),
+          },
+        };
+      })
     );
 
     await env.PDF_BUCKET.put(file.name, pdfBytes, {
