@@ -13,6 +13,25 @@ vi.mock("../src/pdf", () => ({
   ],
 }));
 
+vi.mock("../src/ingestionEnrichment", () => ({
+  enrichPdfToMarkdown: vi.fn(async (_pdfBytes: ArrayBuffer, fallbackPages: unknown) => fallbackPages),
+}));
+
+import { enrichPdfToMarkdown } from "../src/ingestionEnrichment";
+
+type ConfigRow = { key: string; value: string };
+
+function makeMockDb(configRows: ConfigRow[]): D1Database {
+  return {
+    prepare: (sql: string) => {
+      if (sql.startsWith("SELECT key, value FROM config")) {
+        return { all: async () => ({ results: configRows }) };
+      }
+      return { bind: () => ({ run: async () => ({}) }) };
+    },
+  } as unknown as D1Database;
+}
+
 function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
     AI: { run: async () => ({ data: [] }) },
@@ -86,5 +105,54 @@ describe("handleIngest metadata", () => {
     expect(options.customMetadata).toHaveProperty("pageCount");
     expect(options.customMetadata).toHaveProperty("indexedAt");
     expect(options.customMetadata.pageCount).toBe("2");
+  });
+});
+
+describe("handleIngest enrichment wiring", () => {
+  it("calls enrichPdfToMarkdown with the extracted pages when ingestionEnrichmentEnabled is true (the default)", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockClear();
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    expect(enrichPdfToMarkdown).toHaveBeenCalledTimes(1);
+    const [, fallbackPagesArg] = vi.mocked(enrichPdfToMarkdown).mock.calls[0];
+    expect(fallbackPagesArg).toEqual([
+      { page: 1, text: "Light reflects off a mirror at an equal angle." },
+      { page: 2, text: "The angle of incidence equals the angle of reflection." },
+    ]);
+  });
+
+  it("does not call enrichPdfToMarkdown when ingestionEnrichmentEnabled is false", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockClear();
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "false" }]),
+    });
+
+    const response = await handleIngest(makeUploadRequest(), env);
+
+    expect(response.status).toBe(200);
+    expect(enrichPdfToMarkdown).not.toHaveBeenCalled();
+  });
+
+  it("rejects an all-empty-text PDF with 400 before ever calling enrichPdfToMarkdown", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockClear();
+    vi.resetModules();
+    vi.doMock("../src/pdf", () => ({
+      extractPdfPages: async () => [{ page: 1, text: "   " }],
+    }));
+    const { handleIngest: handleIngestFreshImport } = await import("../src/ingestion");
+
+    const env = makeEnv({ INGEST_API_KEY: "" });
+    const response = await handleIngestFreshImport(makeUploadRequest(), env);
+
+    expect(response.status).toBe(400);
+    expect(enrichPdfToMarkdown).not.toHaveBeenCalled();
   });
 });

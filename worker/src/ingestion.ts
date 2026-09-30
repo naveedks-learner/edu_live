@@ -2,6 +2,8 @@ import type { Env } from "./index";
 import { extractPdfPages } from "./pdf";
 import { chunkText } from "./chunker";
 import { chunkVectorId } from "./vectorId";
+import { enrichPdfToMarkdown } from "./ingestionEnrichment";
+import { getRuntimeConfig } from "./config";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 
@@ -49,6 +51,11 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
   }
   if (pages.every((p) => p.text.trim() === "")) {
     return Response.json({ error: "No extractable text found in PDF" }, { status: 400 });
+  }
+
+  const config = await getRuntimeConfig(env);
+  if (config.ingestionEnrichmentEnabled) {
+    pages = await enrichPdfToMarkdown(pdfBytes, pages, env, config);
   }
 
   const chunks = chunkText(pages, file.name);
