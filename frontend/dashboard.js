@@ -314,6 +314,9 @@ async function loadSettingsTab() {
           </fieldset>
           <label class="checkbox-row"><input type="checkbox" name="hardFailNoDocument" ${config.hardFailNoDocument ? "checked" : ""} /> Hard fail when no document found</label>
           <label class="checkbox-row"><input type="checkbox" name="jevEnabled" ${config.jevEnabled ? "checked" : ""} /> JEV relevance filtering enabled</label>
+          <label>JEV relevance threshold (0-3, lower = less strict)
+            <input type="number" name="jevRelevanceThreshold" min="0" max="3" step="0.1" value="${config.jevRelevanceThreshold}" />
+          </label>
           <label class="checkbox-row"><input type="checkbox" name="guardrailEnabled" ${config.guardrailEnabled ? "checked" : ""} /> Guardrail enabled</label>
           <button type="submit">Save</button>
         </form>
@@ -344,6 +347,7 @@ async function loadSettingsTab() {
         webSearchMode: form.webSearchMode.value,
         hardFailNoDocument: form.hardFailNoDocument.checked,
         jevEnabled: form.jevEnabled.checked,
+        jevRelevanceThreshold: Number(form.jevRelevanceThreshold.value),
         guardrailEnabled: form.guardrailEnabled.checked,
       };
       status.textContent = "Saving...";

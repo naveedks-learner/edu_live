@@ -17,6 +17,7 @@ describe("parseConfigRows", () => {
       { key: "guardrailEnabled", value: "false" },
       { key: "llmProvider", value: "workers-ai" },
       { key: "llmModelSlug", value: "some/model" },
+      { key: "jevRelevanceThreshold", value: "1.5" },
     ]);
 
     expect(result).toEqual({
@@ -28,6 +29,7 @@ describe("parseConfigRows", () => {
       guardrailEnabled: false,
       llmProvider: "workers-ai",
       llmModelSlug: "some/model",
+      jevRelevanceThreshold: 1.5,
     });
   });
 
@@ -91,6 +93,15 @@ describe("validateConfigUpdate", () => {
 
   it("accepts a non-empty llmModelSlug", () => {
     expect(validateConfigUpdate({ llmModelSlug: "qwen/qwen-2.5-72b-instruct:free" })).toEqual([]);
+  });
+
+  it("rejects a jevRelevanceThreshold outside [0,3]", () => {
+    expect(validateConfigUpdate({ jevRelevanceThreshold: -0.1 }).length).toBeGreaterThan(0);
+    expect(validateConfigUpdate({ jevRelevanceThreshold: 3.1 }).length).toBeGreaterThan(0);
+  });
+
+  it("accepts a valid jevRelevanceThreshold", () => {
+    expect(validateConfigUpdate({ jevRelevanceThreshold: 1.5 })).toEqual([]);
   });
 });
 

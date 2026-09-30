@@ -13,13 +13,16 @@ export interface RuntimeConfig {
   guardrailEnabled: boolean;
   llmProvider: LlmProvider;
   llmModelSlug: string;
+  jevRelevanceThreshold: number;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
 // feature with an empty config table changes nothing until an admin acts.
-// Exception: llmProvider/llmModelSlug default to OpenRouter/Qwen per product
-// decision - generation moves off Workers AI by default, toggle back via the
-// admin Settings tab if needed.
+// Exceptions (explicit product decisions, not preserved defaults):
+// - llmProvider/llmModelSlug default to OpenRouter/Qwen - generation moves
+//   off Workers AI by default, toggle back via the admin Settings tab.
+// - jevRelevanceThreshold defaults to 1.5 (was hardcoded at 2 / "Relevant")
+//   because the stricter threshold was rejecting valid simple answers.
 export const DEFAULT_CONFIG: RuntimeConfig = {
   topK: 5,
   confidenceThreshold: 0,
@@ -29,6 +32,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   guardrailEnabled: true,
   llmProvider: "openrouter",
   llmModelSlug: DEFAULT_OPENROUTER_MODEL,
+  jevRelevanceThreshold: 1.5,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -48,6 +52,9 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
       : DEFAULT_CONFIG.guardrailEnabled,
     llmProvider: (map.get("llmProvider") as LlmProvider | undefined) ?? DEFAULT_CONFIG.llmProvider,
     llmModelSlug: map.get("llmModelSlug") ?? DEFAULT_CONFIG.llmModelSlug,
+    jevRelevanceThreshold: map.has("jevRelevanceThreshold")
+      ? Number(map.get("jevRelevanceThreshold"))
+      : DEFAULT_CONFIG.jevRelevanceThreshold,
   };
 }
 
@@ -60,6 +67,7 @@ const KNOWN_FIELDS = new Set([
   "guardrailEnabled",
   "llmProvider",
   "llmModelSlug",
+  "jevRelevanceThreshold",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -107,6 +115,15 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
     const v = input.llmModelSlug;
     if (typeof v !== "string" || v.trim().length === 0) {
       errors.push({ field: "llmModelSlug", message: "llmModelSlug must be a non-empty string" });
+    }
+  }
+  if ("jevRelevanceThreshold" in input) {
+    const v = input.jevRelevanceThreshold;
+    if (typeof v !== "number" || v < 0 || v > 3) {
+      errors.push({
+        field: "jevRelevanceThreshold",
+        message: "jevRelevanceThreshold must be a number between 0 and 3 (JEV's relevance scale)",
+      });
     }
   }
 

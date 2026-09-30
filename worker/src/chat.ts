@@ -138,7 +138,10 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     // scores. If JEV failed, jevResult.chunks all carry jevRelevance=null -
     // filtering on that would discard every chunk, which is worse than not
     // running JEV at all.
-    const jevDocSources = jevEnabled && jevResult.success ? filterJevScored(jevResult.chunks) : jevResult.chunks;
+    const jevDocSources =
+      jevEnabled && jevResult.success
+        ? filterJevScored(jevResult.chunks, config.jevRelevanceThreshold)
+        : jevResult.chunks;
 
     // Confidence gate: even a JEV-kept chunk can be too weak a match to
     // trust. The reranker's score scale is not guaranteed to be
