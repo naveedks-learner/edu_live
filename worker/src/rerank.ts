@@ -5,6 +5,7 @@ export interface RetrievedChunk {
   source: string;
   chunkId: number;
   cosineScore: number;
+  pageImageKey: string | null;
 }
 
 export interface RerankedChunk extends RetrievedChunk {

@@ -376,3 +376,49 @@ describe("handleChat transaction tracing", () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe("handleChat pageImageKey passthrough", () => {
+  it("includes pageImageKey in docSources when the matched chunk's metadata has one", async () => {
+    const env = makeEnv({
+      VECTORIZE: {
+        query: async () => ({
+          matches: [
+            {
+              score: 0.9,
+              metadata: {
+                text: "a passage with a diagram",
+                page: 2,
+                pageEnd: 2,
+                source: "notes.pdf",
+                chunkId: 0,
+                pageImageKey: "page-images/notes.pdf/2.png",
+              },
+            },
+          ],
+        }),
+      },
+    });
+
+    const response = await handleChat(makeChatRequest("what does the diagram show"), env, noopCtx());
+    const body = (await response.json()) as { docSources: { pageImageKey: string | null }[] };
+
+    expect(body.docSources[0].pageImageKey).toBe("page-images/notes.pdf/2.png");
+  });
+
+  it("sets pageImageKey to null when the matched chunk's metadata has none", async () => {
+    const env = makeEnv({
+      VECTORIZE: {
+        query: async () => ({
+          matches: [
+            { score: 0.9, metadata: { text: "plain passage", page: 1, pageEnd: 1, source: "notes.pdf", chunkId: 0 } },
+          ],
+        }),
+      },
+    });
+
+    const response = await handleChat(makeChatRequest("a plain question"), env, noopCtx());
+    const body = (await response.json()) as { docSources: { pageImageKey: string | null }[] };
+
+    expect(body.docSources[0].pageImageKey).toBeNull();
+  });
+});

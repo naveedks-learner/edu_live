@@ -121,6 +121,7 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
       source: String(m.metadata?.source ?? ""),
       chunkId: Number(m.metadata?.chunkId ?? 0),
       cosineScore: m.score,
+      pageImageKey: m.metadata?.pageImageKey ? String(m.metadata.pageImageKey) : null,
     }));
 
     const reranked = await rerank(question, retrieved, workersAiScoreFn(env.AI));
@@ -207,7 +208,13 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
 
     return Response.json({
       answer,
-      docSources: docSources.map((c) => ({ source: c.source, page: c.page, pageEnd: c.pageEnd, text: c.text })),
+      docSources: docSources.map((c) => ({
+        source: c.source,
+        page: c.page,
+        pageEnd: c.pageEnd,
+        text: c.text,
+        pageImageKey: c.pageImageKey,
+      })),
       webSources,
     });
   } catch (err) {
