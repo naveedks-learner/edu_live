@@ -51,6 +51,19 @@ chatForm.addEventListener("submit", async (event) => {
 
     thinkingEl.classList.remove("thinking");
     thinkingEl.textContent = result.answer ?? `Error: ${result.error}`;
+
+    const imageKeys = (result.docSources ?? [])
+      .map((s) => s.pageImageKey)
+      .filter((key, index, all) => key && all.indexOf(key) === index); // dedupe, drop nulls
+
+    for (const key of imageKeys) {
+      const img = document.createElement("img");
+      img.src = `${WORKER_URL}/images/${encodeURIComponent(key)}`;
+      img.className = "answer-source-image";
+      img.alt = "Source page image";
+      thinkingEl.appendChild(document.createElement("br"));
+      thinkingEl.appendChild(img);
+    }
   } catch (err) {
     thinkingEl.classList.remove("thinking");
     thinkingEl.textContent = `Error: could not reach the server (${err.message})`;
