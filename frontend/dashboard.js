@@ -335,6 +335,18 @@ async function loadSettingsTab() {
           <button type="submit">Save</button>
         </form>
         <p id="llm-status" class="txn-meta"></p>
+      </div>
+      <div class="card">
+        <h2>Ingestion enrichment</h2>
+        <p class="txn-meta">Extracts formulas, tables, and figures from uploaded PDFs via a vision-capable model before chunking. Applies to documents uploaded after this is enabled - existing documents need re-upload to benefit.</p>
+        <form id="ingestion-form" class="settings-form">
+          <label class="checkbox-row"><input type="checkbox" name="ingestionEnrichmentEnabled" ${config.ingestionEnrichmentEnabled ? "checked" : ""} /> Enrichment enabled</label>
+          <label>Model (slug)
+            <input type="text" name="ingestionModelSlug" value="${escapeHtml(config.ingestionModelSlug)}" placeholder="google/gemini-2.5-flash" />
+          </label>
+          <button type="submit">Save</button>
+        </form>
+        <p id="ingestion-status" class="txn-meta"></p>
       </div>`;
 
     document.getElementById("settings-form").addEventListener("submit", async (event) => {
@@ -380,6 +392,29 @@ async function loadSettingsTab() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
         status.textContent = "Saved - takes effect on the next question.";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      }
+    });
+
+    document.getElementById("ingestion-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const status = document.getElementById("ingestion-status");
+      const update = {
+        ingestionEnrichmentEnabled: form.ingestionEnrichmentEnabled.checked,
+        ingestionModelSlug: form.ingestionModelSlug.value.trim(),
+      };
+      status.textContent = "Saving...";
+      try {
+        const response = await fetch(`${WORKER_URL}/admin/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...adminHeaders() },
+          body: JSON.stringify(update),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+        status.textContent = "Saved - applies to documents uploaded from now on.";
       } catch (err) {
         status.textContent = `Error: ${err.message}`;
       }
