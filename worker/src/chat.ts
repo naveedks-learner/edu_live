@@ -5,12 +5,9 @@ import { scoreChunksWithJev, filterJevScored, JEV_MODEL_ID, type JevScoredChunk 
 import { webSearch, formatWebResultsAsContext } from "./webSearch";
 import { buildTransactionTrace, type TransactionTrace } from "./transactionTrace";
 import { getRuntimeConfig } from "./config";
+import { generateChatCompletion } from "./llm";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
-// @cf/meta/llama-3.1-8b-instruct was deprecated by Cloudflare (2026-05-30);
-// -fp8 is the closest available replacement (same 8B model, fp8-quantized)
-// per `wrangler ai models` against the live catalog.
-const GENERATION_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 const HARD_FAIL_MESSAGE =
   "I don't have enough information in the indexed documents (or the web) to answer that question.";
@@ -171,23 +168,29 @@ export async function handleChat(request: Request, env: Env, ctx: ExecutionConte
     const jevModel = jevEnabled ? JEV_MODEL_ID : null;
 
     let answer: string;
+    let llmProvider: string = config.llmProvider;
+    let llmModel: string = config.llmModelSlug;
     if (config.hardFailNoDocument && docSources.length === 0 && webSources.length === 0) {
       answer = HARD_FAIL_MESSAGE;
     } else {
-      const generateResponse = await env.AI.run(GENERATION_MODEL, {
-        messages: [
+      const generateResult = await generateChatCompletion(
+        [
           { role: "system", content: SYSTEM_PROMPT + ANSWER_STYLE_INSTRUCTIONS[answerStyle] },
           { role: "user", content: llmInput },
         ],
-        max_tokens: ANSWER_STYLE_MAX_TOKENS[answerStyle],
-      });
-      answer = (generateResponse as { response: string }).response;
+        ANSWER_STYLE_MAX_TOKENS[answerStyle],
+        env,
+        config
+      );
+      answer = generateResult.text;
+      llmProvider = generateResult.provider;
+      llmModel = generateResult.model;
     }
 
     const trace = buildTransactionTrace({
       question,
-      provider: "workers-ai",
-      model: GENERATION_MODEL,
+      provider: llmProvider,
+      model: llmModel,
       pathTaken: webSources.length > 0 ? "web_fallback" : "pdf_only",
       jevAnnotated: jevResult.chunks,
       keptKeys,
