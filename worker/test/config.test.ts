@@ -18,6 +18,8 @@ describe("parseConfigRows", () => {
       { key: "llmProvider", value: "workers-ai" },
       { key: "llmModelSlug", value: "some/model" },
       { key: "jevRelevanceThreshold", value: "1.5" },
+      { key: "ingestionEnrichmentEnabled", value: "false" },
+      { key: "ingestionModelSlug", value: "some/vision-model" },
     ]);
 
     expect(result).toEqual({
@@ -30,6 +32,8 @@ describe("parseConfigRows", () => {
       llmProvider: "workers-ai",
       llmModelSlug: "some/model",
       jevRelevanceThreshold: 1.5,
+      ingestionEnrichmentEnabled: false,
+      ingestionModelSlug: "some/vision-model",
     });
   });
 
@@ -102,6 +106,28 @@ describe("validateConfigUpdate", () => {
 
   it("accepts a valid jevRelevanceThreshold", () => {
     expect(validateConfigUpdate({ jevRelevanceThreshold: 1.5 })).toEqual([]);
+  });
+});
+
+describe("ingestion enrichment config", () => {
+  it("defaults ingestionEnrichmentEnabled to true and ingestionModelSlug to the Gemini default", () => {
+    expect(DEFAULT_CONFIG.ingestionEnrichmentEnabled).toBe(true);
+    expect(DEFAULT_CONFIG.ingestionModelSlug).toBe("google/gemini-2.5-flash");
+  });
+
+  it("rejects a non-boolean ingestionEnrichmentEnabled", () => {
+    expect(validateConfigUpdate({ ingestionEnrichmentEnabled: "true" }).length).toBeGreaterThan(0);
+  });
+
+  it("rejects an empty ingestionModelSlug", () => {
+    expect(validateConfigUpdate({ ingestionModelSlug: "" }).length).toBeGreaterThan(0);
+    expect(validateConfigUpdate({ ingestionModelSlug: "   " }).length).toBeGreaterThan(0);
+  });
+
+  it("accepts a valid ingestion enrichment update", () => {
+    expect(
+      validateConfigUpdate({ ingestionEnrichmentEnabled: false, ingestionModelSlug: "x/y" })
+    ).toEqual([]);
   });
 });
 

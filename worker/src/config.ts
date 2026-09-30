@@ -14,6 +14,8 @@ export interface RuntimeConfig {
   llmProvider: LlmProvider;
   llmModelSlug: string;
   jevRelevanceThreshold: number;
+  ingestionEnrichmentEnabled: boolean;
+  ingestionModelSlug: string;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
@@ -23,6 +25,9 @@ export interface RuntimeConfig {
 //   off Workers AI by default, toggle back via the admin Settings tab.
 // - jevRelevanceThreshold defaults to 1.5 (was hardcoded at 2 / "Relevant")
 //   because the stricter threshold was rejecting valid simple answers.
+// - ingestionEnrichmentEnabled defaults to true, ingestionModelSlug to a
+//   PDF-capable OpenRouter model - new ingestion-time behavior, not a
+//   preserved default (unpdf-only extraction was the only option before).
 export const DEFAULT_CONFIG: RuntimeConfig = {
   topK: 5,
   confidenceThreshold: 0,
@@ -33,6 +38,8 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   llmProvider: "openrouter",
   llmModelSlug: DEFAULT_OPENROUTER_MODEL,
   jevRelevanceThreshold: 1.5,
+  ingestionEnrichmentEnabled: true,
+  ingestionModelSlug: "google/gemini-2.5-flash",
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -55,6 +62,10 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
     jevRelevanceThreshold: map.has("jevRelevanceThreshold")
       ? Number(map.get("jevRelevanceThreshold"))
       : DEFAULT_CONFIG.jevRelevanceThreshold,
+    ingestionEnrichmentEnabled: map.has("ingestionEnrichmentEnabled")
+      ? map.get("ingestionEnrichmentEnabled") === "true"
+      : DEFAULT_CONFIG.ingestionEnrichmentEnabled,
+    ingestionModelSlug: map.get("ingestionModelSlug") ?? DEFAULT_CONFIG.ingestionModelSlug,
   };
 }
 
@@ -68,6 +79,8 @@ const KNOWN_FIELDS = new Set([
   "llmProvider",
   "llmModelSlug",
   "jevRelevanceThreshold",
+  "ingestionEnrichmentEnabled",
+  "ingestionModelSlug",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -124,6 +137,15 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
         field: "jevRelevanceThreshold",
         message: "jevRelevanceThreshold must be a number between 0 and 3 (JEV's relevance scale)",
       });
+    }
+  }
+  if ("ingestionEnrichmentEnabled" in input && typeof input.ingestionEnrichmentEnabled !== "boolean") {
+    errors.push({ field: "ingestionEnrichmentEnabled", message: "ingestionEnrichmentEnabled must be a boolean" });
+  }
+  if ("ingestionModelSlug" in input) {
+    const v = input.ingestionModelSlug;
+    if (typeof v !== "string" || v.trim().length === 0) {
+      errors.push({ field: "ingestionModelSlug", message: "ingestionModelSlug must be a non-empty string" });
     }
   }
 
