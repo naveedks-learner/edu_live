@@ -26,6 +26,10 @@ export interface Env {
   // Shared secret required on the x-admin-key header for the /admin/* routes.
   // Optional: if unset, /admin/* is unauthenticated (e.g. local dev).
   ADMIN_API_KEY: string;
+  // Cloudflare Browser Rendering - used to screenshot PDF pages containing
+  // figures, so the actual image (not just a text description) can be
+  // shown back to students. See worker/src/pageScreenshot.ts.
+  BROWSER: Fetcher;
 }
 
 export default {
