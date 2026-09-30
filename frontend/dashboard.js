@@ -318,6 +318,20 @@ async function loadSettingsTab() {
           <button type="submit">Save</button>
         </form>
         <p id="settings-status" class="txn-meta"></p>
+      </div>
+      <div class="card">
+        <h2>LLM provider</h2>
+        <p class="txn-meta">Controls which model answers chat questions. Changes apply to the next question asked.</p>
+        <form id="llm-form" class="settings-form">
+          <label>Provider
+            <input type="text" value="OpenRouter" disabled />
+          </label>
+          <label>Model (slug)
+            <input type="text" name="llmModelSlug" value="${escapeHtml(config.llmModelSlug)}" placeholder="qwen/qwen-2.5-72b-instruct:free" />
+          </label>
+          <button type="submit">Save</button>
+        </form>
+        <p id="llm-status" class="txn-meta"></p>
       </div>`;
 
     document.getElementById("settings-form").addEventListener("submit", async (event) => {
@@ -332,6 +346,26 @@ async function loadSettingsTab() {
         jevEnabled: form.jevEnabled.checked,
         guardrailEnabled: form.guardrailEnabled.checked,
       };
+      status.textContent = "Saving...";
+      try {
+        const response = await fetch(`${WORKER_URL}/admin/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...adminHeaders() },
+          body: JSON.stringify(update),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+        status.textContent = "Saved - takes effect on the next question.";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      }
+    });
+
+    document.getElementById("llm-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const status = document.getElementById("llm-status");
+      const update = { llmModelSlug: form.llmModelSlug.value.trim() };
       status.textContent = "Saving...";
       try {
         const response = await fetch(`${WORKER_URL}/admin/config`, {

@@ -45,10 +45,14 @@ function makeMockDb(configRows: ConfigRow[], onInsert?: (args: unknown[]) => voi
 
 // Defaults mirror the old env-var defaults (guardrail and JEV off) so
 // existing tests that don't care about either keep working unchanged;
-// override via `configRows` for tests that do.
+// override via `configRows` for tests that do. llmProvider defaults to
+// workers-ai here (unlike production, which defaults to openrouter) so
+// existing tests that only mock env.AI.run keep working unchanged -
+// provider-specific behavior gets its own dedicated tests below.
 const DEFAULT_TEST_ROWS: ConfigRow[] = [
   { key: "guardrailEnabled", value: "false" },
   { key: "jevEnabled", value: "false" },
+  { key: "llmProvider", value: "workers-ai" },
 ];
 
 function makeEnv(overrides: Partial<Env> = {}, configRows: ConfigRow[] = []): Env {

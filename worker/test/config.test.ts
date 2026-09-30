@@ -15,6 +15,8 @@ describe("parseConfigRows", () => {
       { key: "hardFailNoDocument", value: "true" },
       { key: "jevEnabled", value: "false" },
       { key: "guardrailEnabled", value: "false" },
+      { key: "llmProvider", value: "workers-ai" },
+      { key: "llmModelSlug", value: "some/model" },
     ]);
 
     expect(result).toEqual({
@@ -24,6 +26,8 @@ describe("parseConfigRows", () => {
       hardFailNoDocument: true,
       jevEnabled: false,
       guardrailEnabled: false,
+      llmProvider: "workers-ai",
+      llmModelSlug: "some/model",
     });
   });
 
@@ -69,6 +73,24 @@ describe("validateConfigUpdate", () => {
 
   it("rejects a non-boolean for a boolean field", () => {
     expect(validateConfigUpdate({ jevEnabled: "true" }).length).toBeGreaterThan(0);
+  });
+
+  it("rejects an unrecognized llmProvider", () => {
+    expect(validateConfigUpdate({ llmProvider: "bogus" }).length).toBeGreaterThan(0);
+  });
+
+  it("accepts a valid llmProvider", () => {
+    expect(validateConfigUpdate({ llmProvider: "workers-ai" })).toEqual([]);
+    expect(validateConfigUpdate({ llmProvider: "openrouter" })).toEqual([]);
+  });
+
+  it("rejects an empty llmModelSlug", () => {
+    expect(validateConfigUpdate({ llmModelSlug: "" }).length).toBeGreaterThan(0);
+    expect(validateConfigUpdate({ llmModelSlug: "   " }).length).toBeGreaterThan(0);
+  });
+
+  it("accepts a non-empty llmModelSlug", () => {
+    expect(validateConfigUpdate({ llmModelSlug: "qwen/qwen-2.5-72b-instruct:free" })).toEqual([]);
   });
 });
 

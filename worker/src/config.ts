@@ -1,6 +1,8 @@
 import type { Env } from "./index";
+import { DEFAULT_OPENROUTER_MODEL } from "./llm";
 
 export type WebSearchMode = "rag_only" | "rag_web_fallback";
+export type LlmProvider = "openrouter" | "workers-ai";
 
 export interface RuntimeConfig {
   topK: number;
@@ -9,10 +11,15 @@ export interface RuntimeConfig {
   hardFailNoDocument: boolean;
   jevEnabled: boolean;
   guardrailEnabled: boolean;
+  llmProvider: LlmProvider;
+  llmModelSlug: string;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
 // feature with an empty config table changes nothing until an admin acts.
+// Exception: llmProvider/llmModelSlug default to OpenRouter/Qwen per product
+// decision - generation moves off Workers AI by default, toggle back via the
+// admin Settings tab if needed.
 export const DEFAULT_CONFIG: RuntimeConfig = {
   topK: 5,
   confidenceThreshold: 0,
@@ -20,6 +27,8 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   hardFailNoDocument: false,
   jevEnabled: true,
   guardrailEnabled: true,
+  llmProvider: "openrouter",
+  llmModelSlug: DEFAULT_OPENROUTER_MODEL,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -37,6 +46,8 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
     guardrailEnabled: map.has("guardrailEnabled")
       ? map.get("guardrailEnabled") === "true"
       : DEFAULT_CONFIG.guardrailEnabled,
+    llmProvider: (map.get("llmProvider") as LlmProvider | undefined) ?? DEFAULT_CONFIG.llmProvider,
+    llmModelSlug: map.get("llmModelSlug") ?? DEFAULT_CONFIG.llmModelSlug,
   };
 }
 
@@ -47,6 +58,8 @@ const KNOWN_FIELDS = new Set([
   "hardFailNoDocument",
   "jevEnabled",
   "guardrailEnabled",
+  "llmProvider",
+  "llmModelSlug",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -83,6 +96,17 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
   for (const field of ["hardFailNoDocument", "jevEnabled", "guardrailEnabled"] as const) {
     if (field in input && typeof input[field] !== "boolean") {
       errors.push({ field, message: `${field} must be a boolean` });
+    }
+  }
+  if ("llmProvider" in input) {
+    if (input.llmProvider !== "openrouter" && input.llmProvider !== "workers-ai") {
+      errors.push({ field: "llmProvider", message: "llmProvider must be 'openrouter' or 'workers-ai'" });
+    }
+  }
+  if ("llmModelSlug" in input) {
+    const v = input.llmModelSlug;
+    if (typeof v !== "string" || v.trim().length === 0) {
+      errors.push({ field: "llmModelSlug", message: "llmModelSlug must be a non-empty string" });
     }
   }
 
