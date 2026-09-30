@@ -12,8 +12,11 @@ export interface LlmResult {
 }
 
 // OpenRouter free-tier Qwen model - editable at runtime via
-// RuntimeConfig.llmModelSlug (admin dashboard Settings tab), no redeploy needed.
-export const DEFAULT_OPENROUTER_MODEL = "qwen/qwen-2.5-72b-instruct:free";
+// RuntimeConfig.llmModelSlug (admin dashboard Settings tab), no redeploy
+// needed. OpenRouter's free-tier lineup shifts over time (models get
+// deprecated/promoted to paid-only) - if this slug 404s, check
+// https://openrouter.ai/models?max_price=0 for a current one.
+export const DEFAULT_OPENROUTER_MODEL = "qwen/qwen3-235b-a22b:free";
 const WORKERS_AI_GENERATION_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 async function callOpenRouter(
