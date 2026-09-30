@@ -30,7 +30,7 @@ export async function capturePageScreenshot(
     const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}`;
     await page.goto(dataUrl);
     const screenshot = await page.screenshot();
-    return screenshot as ArrayBuffer;
+    return screenshot as unknown as ArrayBuffer;
   } catch (err) {
     console.error(`page screenshot failed for page ${pageNumber}`, err);
     return null;

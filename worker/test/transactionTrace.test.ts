@@ -13,6 +13,7 @@ function chunk(overrides: Partial<JevScoredChunk> = {}): JevScoredChunk {
     rerankScore: 0.7,
     jevRelevance: 2.5,
     jevBlocked: false,
+    pageImageKey: null,
     ...overrides,
   };
 }

@@ -1,6 +1,6 @@
 # PDF content enrichment layer (formulas, tables, images)
 
-**Status:** Draft — expanded scope (actual image reproduction), awaiting user review
+**Status:** Implemented on branch `feature/pdf-content-enrichment`
 **Author:** Claude (drafted while user was away, per explicit instruction to prepare a ready-to-build design)
 
 ## Problem
@@ -68,6 +68,14 @@ text.
 This output — enriched per-page Markdown — replaces `unpdf`'s plain text as
 the input to the existing `chunker.ts`. Chunking, embedding, and Vectorize
 storage are **unchanged**.
+
+**Implementation note:** v1 sends the whole PDF in a single OpenRouter call
+(no page-range batching) and fails open for the whole document if that call
+fails, rather than per-batch. This is a deliberate scope reduction - batching
+adds complexity (splitting PDF byte ranges isn't possible without a PDF-writing
+library) for a problem (model output-length limits) not yet confirmed to
+occur on this app's real documents. Revisit if a real textbook PDF hits
+output-length limits in the deployed app.
 
 ### Why this over the alternatives
 

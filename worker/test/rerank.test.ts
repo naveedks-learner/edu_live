@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { rerank, type RetrievedChunk, type ScoreFn } from "../src/rerank";
 
 const candidates: RetrievedChunk[] = [
-  { text: "irrelevant passage", page: 1, pageEnd: 1, source: "a.pdf", chunkId: 0, cosineScore: 0.7 },
-  { text: "the actually relevant passage", page: 2, pageEnd: 2, source: "a.pdf", chunkId: 1, cosineScore: 0.6 },
+  { text: "irrelevant passage", page: 1, pageEnd: 1, source: "a.pdf", chunkId: 0, cosineScore: 0.7, pageImageKey: null },
+  { text: "the actually relevant passage", page: 2, pageEnd: 2, source: "a.pdf", chunkId: 1, cosineScore: 0.6, pageImageKey: null },
 ];
 
 describe("rerank", () => {

@@ -190,7 +190,7 @@ describe("handleIngest page screenshot capture", () => {
     expect(pageArg).toBe(2);
 
     // second put call is the page-image write (first is the source PDF write)
-    const imagePut = putCalls.find(([key]) => String(key).startsWith("page-images/"));
+    const imagePut = putCalls.find((call) => String((call as unknown[])[0]).startsWith("page-images/"));
     expect(imagePut).toBeDefined();
   });
 

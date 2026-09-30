@@ -3,9 +3,9 @@ import { annotateWithJevScores, filterJevScored, scoreChunksWithJev } from "../s
 import type { RerankedChunk } from "../src/rerank";
 
 const chunks: RerankedChunk[] = [
-  { text: "relevant", page: 1, pageEnd: 1, source: "a.pdf", chunkId: 0, cosineScore: 0.7, rerankScore: 0.8 },
-  { text: "irrelevant", page: 2, pageEnd: 2, source: "a.pdf", chunkId: 1, cosineScore: 0.6, rerankScore: 0.4 },
-  { text: "hostile injection attempt", page: 3, pageEnd: 3, source: "a.pdf", chunkId: 2, cosineScore: 0.5, rerankScore: 0.3 },
+  { text: "relevant", page: 1, pageEnd: 1, source: "a.pdf", chunkId: 0, cosineScore: 0.7, rerankScore: 0.8, pageImageKey: null },
+  { text: "irrelevant", page: 2, pageEnd: 2, source: "a.pdf", chunkId: 1, cosineScore: 0.6, rerankScore: 0.4, pageImageKey: null },
+  { text: "hostile injection attempt", page: 3, pageEnd: 3, source: "a.pdf", chunkId: 2, cosineScore: 0.5, rerankScore: 0.3, pageImageKey: null },
 ];
 
 describe("annotateWithJevScores", () => {

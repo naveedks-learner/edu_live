@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 const mockPage = {
-  goto: vi.fn(async () => {}),
+  goto: vi.fn(async (_url: string) => {}),
   screenshot: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
   close: vi.fn(async () => {}),
 };
