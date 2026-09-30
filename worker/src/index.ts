@@ -1,5 +1,6 @@
 import { handleIngest } from "./ingestion";
 import { handleChat } from "./chat";
+import { handleGetImage } from "./images";
 import { withCors, handleCorsPreflight } from "./cors";
 import {
   isAdminAuthorized,
@@ -44,6 +45,10 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/chat") {
       return withCors(await handleChat(request, env, ctx));
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/images/")) {
+      const key = decodeURIComponent(url.pathname.slice("/images/".length));
+      return withCors(await handleGetImage(key, env));
     }
     if (request.method === "GET" && url.pathname === "/admin/documents") {
       if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
