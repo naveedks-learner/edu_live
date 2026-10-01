@@ -164,3 +164,101 @@ describe("handleExplain happy path", () => {
     expect((inserted as unknown[])[4]).toBe("concept_explainer");
   });
 });
+
+describe("handleExplain error handling", () => {
+  it("returns 400 when concept is missing", async () => {
+    const env = makeEnv();
+    const response = await handleExplain(makeRequest({}), env, noopCtx());
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when concept is only whitespace", async () => {
+    const env = makeEnv();
+    const response = await handleExplain(makeRequest({ concept: "   " }), env, noopCtx());
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 404 when conceptExplainerEnabled is false", async () => {
+    const env = makeEnv({}, [{ key: "conceptExplainerEnabled", value: "false" }]);
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    expect(response.status).toBe(404);
+  });
+
+  it("returns a JSON 502, not an uncaught exception, when a downstream call throws", async () => {
+    const throwingEnv = makeEnv({
+      AI: { run: async () => { throw new Error("Workers AI is down"); } },
+      VECTORIZE: {},
+      PDF_BUCKET: {},
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), throwingEnv, noopCtx());
+
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("falls back to raw-text explanation when the LLM response has no JSON fence", async () => {
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          return { response: "Force equals mass times acceleration, in plain prose with no JSON at all." };
+        },
+      },
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { simpleExplanation: string; steps: string[] | null; formula: string | null };
+
+    expect(response.status).toBe(200);
+    expect(body.simpleExplanation).toContain("Force equals mass");
+    expect(body.steps).toBeNull();
+    expect(body.formula).toBeNull();
+  });
+
+  it("falls back gracefully when the LLM returns valid JSON with the wrong shape", async () => {
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          return { response: '```json\n{"steps": "not an array"}\n```' };
+        },
+      },
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { steps: string[] | null; concept: string };
+
+    expect(response.status).toBe(200);
+    expect(body.steps).toBeNull();
+    expect(body.concept).toBe("Newton's second law");
+  });
+
+  it("fails closed on guardrail error (blocks rather than allows through)", async () => {
+    const env = makeEnv(
+      {
+        AI: { run: async () => { throw new Error("embedding model unavailable"); } },
+      },
+      [{ key: "guardrailEnabled", value: "true" }]
+    );
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { simpleExplanation: string };
+
+    expect(response.status).toBe(503);
+    expect(body.simpleExplanation).toBeTruthy();
+  });
+
+  it("URL-encodes special characters in the concept when building videoSearchUrl", async () => {
+    const env = makeEnv();
+    const response = await handleExplain(makeRequest({ concept: "Acid & Base reactions" }), env, noopCtx());
+    const body = (await response.json()) as { videoSearchUrl: string };
+
+    expect(response.status).toBe(200);
+    expect(body.videoSearchUrl).not.toContain("&Base");
+    expect(body.videoSearchUrl).toContain(encodeURIComponent("Acid & Base reactions"));
+  });
+});
