@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 const mockPage = {
+  setViewport: vi.fn(async (_opts: unknown) => {}),
   goto: vi.fn(async (_url: string, _opts?: unknown) => {}),
   screenshot: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
   close: vi.fn(async () => {}),
@@ -54,6 +55,32 @@ describe("capturePageScreenshot", () => {
     expect(url).toContain("#page=3");
     expect(mockPage.close).toHaveBeenCalledTimes(1);
     expect(mockBrowser.close).not.toHaveBeenCalled();
+  });
+
+  it("disables Chromium's PDF viewer toolbar and thumbnail sidebar in the URL, so the screenshot captures only the page content, not the viewer UI chrome", async () => {
+    mockPage.goto.mockClear();
+    const browser = (await launchScreenshotBrowser(makeEnv()))!;
+    const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake").buffer;
+
+    await capturePageScreenshot(browser, pdfBytes, 1);
+
+    const [url] = mockPage.goto.mock.calls[0];
+    expect(url).toContain("toolbar=0");
+    expect(url).toContain("navpanes=0");
+    expect(url).toContain("statusbar=0");
+  });
+
+  it("sets a larger viewport before navigating, so more of the page is captured than Puppeteer's small default", async () => {
+    mockPage.setViewport.mockClear();
+    const browser = (await launchScreenshotBrowser(makeEnv()))!;
+    const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake").buffer;
+
+    await capturePageScreenshot(browser, pdfBytes, 1);
+
+    expect(mockPage.setViewport).toHaveBeenCalledWith(expect.objectContaining({ width: expect.any(Number), height: expect.any(Number) }));
+    const [{ width, height }] = mockPage.setViewport.mock.calls[0] as [{ width: number; height: number }];
+    expect(width).toBeGreaterThanOrEqual(1200);
+    expect(height).toBeGreaterThanOrEqual(1200);
   });
 
   it("returns null (never throws) when navigation or screenshot fails", async () => {

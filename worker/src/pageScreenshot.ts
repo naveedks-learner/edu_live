@@ -46,12 +46,22 @@ export async function capturePageScreenshot(
   let page;
   try {
     page = await browser.newPage();
-    const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}`;
+    // Puppeteer's default viewport (800x600) is small enough that Chromium's
+    // PDF viewer UI chrome (toolbar, thumbnail sidebar) ends up taking a
+    // large share of the captured frame alongside the actual page content -
+    // confirmed in production: a captured screenshot showed the full browser
+    // PDF-viewer app, not a clean page image. A larger viewport leaves more
+    // room for the actual content relative to that chrome.
+    await page.setViewport({ width: 1600, height: 1600 });
+    // toolbar=0/navpanes=0/statusbar=0 are Chromium PDF viewer URL
+    // parameters that hide its toolbar and thumbnail sidebar - without them
+    // the screenshot captures the browser's PDF-reader app, not the page.
+    const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}&toolbar=0&navpanes=0&statusbar=0`;
     // networkidle0 (rather than the default "load") waits for the PDF
     // viewer's own rendering to settle before screenshotting - screenshotting
     // immediately on "load" can capture a blank or toolbar-only frame.
     await page.goto(dataUrl, { waitUntil: "networkidle0" });
-    const screenshot = await page.screenshot({ fullPage: true });
+    const screenshot = await page.screenshot();
     return screenshot as unknown as ArrayBuffer;
   } catch (err) {
     console.error(`page screenshot failed for page ${pageNumber}`, err);
