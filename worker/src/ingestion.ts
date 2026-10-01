@@ -126,6 +126,16 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
         enriched: String(enrichmentApplied),
       },
     });
+
+    // Only saved when enrichment actually changed the content - otherwise
+    // this would just duplicate the raw PDF's plain-text extraction, which
+    // isn't what "cleaned" means to an admin reviewing the dashboard.
+    if (enrichmentApplied) {
+      const cleanedText = pages.map((p) => `# Page ${p.page}\n\n${p.text}`).join("\n\n---\n\n");
+      await env.PDF_BUCKET.put(`cleaned/${file.name}.md`, cleanedText, {
+        httpMetadata: { contentType: "text/markdown" },
+      });
+    }
   } catch (err) {
     console.error("Ingestion failed after validation", err);
     return Response.json({ error: "Failed to index this document - please try again" }, { status: 502 });

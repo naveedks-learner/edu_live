@@ -88,6 +88,7 @@ function wireUploadCard(onUploaded) {
 
     uploadBtn.disabled = true;
     uploadStatus.textContent = "Uploading...";
+    uploadStatus.classList.remove("upload-status-success", "upload-status-error");
     const formData = new FormData();
     formData.append("file", file);
     const ingestKey = ingestKeyInput.value.trim();
@@ -103,10 +104,17 @@ function wireUploadCard(onUploaded) {
       uploadStatus.textContent = response.ok
         ? `${result.status}: ${result.source}${result.chunkCount ? ` (${result.chunkCount} chunks)` : ""}`
         : `Error: ${result.error}`;
+      uploadStatus.classList.toggle("upload-status-success", response.ok);
+      uploadStatus.classList.toggle("upload-status-error", !response.ok);
 
-      if (response.ok) onUploaded();
+      // Reloading the tab immediately would wipe this message the instant
+      // it appears (the reload rebuilds this whole card, including a fresh,
+      // blank status paragraph) - pausing first gives the admin a chance to
+      // actually read it.
+      if (response.ok) setTimeout(onUploaded, 1800);
     } catch (err) {
       uploadStatus.textContent = `Error: could not reach the server (${err.message})`;
+      uploadStatus.classList.add("upload-status-error");
     } finally {
       uploadBtn.disabled = false;
     }
@@ -126,20 +134,9 @@ async function loadDocumentsTab() {
 
     const totalChunks = documents.reduce((sum, d) => sum + (d.chunkCount ?? 0), 0);
 
-    const rows = documents
-      .map((doc) => {
-        const chunkSection = doc.chunks
-          ? `<details class="io-block chunk-preview">
-               <summary>View ${doc.chunks.length} chunk(s)</summary>
-               ${doc.chunks
-                 .map(
-                   (c) => `<div class="chunk-item"><div class="chunk-meta">Chunk ${c.chunkId} · page ${c.page}</div><pre>${escapeHtml(c.text)}</pre></div>`
-                 )
-                 .join("")}
-             </details>`
-          : `<span class="txn-meta">Chunks not shown for this document</span>`;
-
-        return `
+    const rawRows = documents
+      .map(
+        (doc) => `
         <tr>
           <td>${escapeHtml(doc.name)}</td>
           <td>${(doc.sizeBytes / 1024).toFixed(1)} KB</td>
@@ -147,9 +144,34 @@ async function loadDocumentsTab() {
           <td>${doc.pageCount ?? "—"}</td>
           <td>${doc.chunkCount ?? "—"}</td>
           <td>${doc.enriched === null ? "—" : doc.enriched ? "Yes" : "No"}</td>
-        </tr>
-        <tr class="chunk-row"><td colspan="6">${chunkSection}</td></tr>`;
-      })
+        </tr>`
+      )
+      .join("");
+
+    const cleanedRows = documents
+      .map((doc) =>
+        doc.enriched
+          ? `<details class="io-block cleaned-text" data-doc-name="${escapeHtml(doc.name)}">
+               <summary>${escapeHtml(doc.name)}</summary>
+               <div class="cleaned-text-body txn-meta">Loading...</div>
+             </details>`
+          : `<div class="chunk-item"><div class="chunk-meta">${escapeHtml(doc.name)}</div><span class="txn-meta">Not available - enrichment did not run or produced no changes for this document</span></div>`
+      )
+      .join("");
+
+    const chunkSections = documents
+      .filter((doc) => doc.chunks)
+      .map(
+        (doc) => `
+        <details class="io-block chunk-preview">
+          <summary>${escapeHtml(doc.name)} - ${doc.chunks.length} chunk(s)</summary>
+          ${doc.chunks
+            .map(
+              (c) => `<div class="chunk-item"><div class="chunk-meta">Chunk ${c.chunkId} · page ${c.page}</div><pre>${escapeHtml(c.text)}</pre></div>`
+            )
+            .join("")}
+        </details>`
+      )
       .join("");
 
     el.innerHTML = `
@@ -161,17 +183,48 @@ async function loadDocumentsTab() {
         </div>
       </div>
       <div class="card">
-        <h2>Indexed documents</h2>
-        <p class="txn-meta">Chunk text shown for the ${chunkPreviewCount ?? 0} most recently indexed document(s) only.</p>
+        <h2>Raw PDFs</h2>
+        <p class="txn-meta">The original uploaded PDF files, as stored.</p>
         <table>
           <thead><tr><th>File</th><th>Size</th><th>Indexed</th><th>Pages</th><th>Chunks</th><th>Enriched</th></tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${rawRows}</tbody>
         </table>
+      </div>
+      <div class="card">
+        <h2>Cleaned PDFs</h2>
+        <p class="txn-meta">The enriched content produced by the ingestion clean-up layer - formulas, tables, and figure descriptions - for documents where enrichment applied.</p>
+        ${cleanedRows}
+      </div>
+      <div class="card">
+        <h2>Chunks</h2>
+        <p class="txn-meta">Chunk text shown for the ${chunkPreviewCount ?? 0} most recently indexed document(s) only.</p>
+        ${chunkSections || `<p class="txn-meta">No chunk previews available.</p>`}
       </div>`;
     wireUploadCard(loadDocumentsTab);
+    wireCleanedTextToggles();
   } catch (err) {
     renderError(el, err.message);
   }
+}
+
+function wireCleanedTextToggles() {
+  document.querySelectorAll(".cleaned-text").forEach((details) => {
+    details.addEventListener(
+      "toggle",
+      async () => {
+        if (!details.open) return;
+        const body = details.querySelector(".cleaned-text-body");
+        const name = details.dataset.docName;
+        try {
+          const { text } = await fetchAdmin(`/admin/documents/cleaned?name=${encodeURIComponent(name)}`);
+          body.outerHTML = `<pre class="cleaned-text-body">${escapeHtml(text)}</pre>`;
+        } catch (err) {
+          body.textContent = `Error loading cleaned text: ${err.message}`;
+        }
+      },
+      { once: true }
+    );
+  });
 }
 
 // --- Tab: TransactionTracker ---

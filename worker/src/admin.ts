@@ -15,10 +15,13 @@ function adminErrorResponse(routeName: string, err: unknown): Response {
 export async function handleAdminDocuments(env: Env): Promise<Response> {
   try {
     const listed = await env.PDF_BUCKET.list({ include: ["customMetadata"] });
-    // page-images/ objects are captured page screenshots (see
-    // pageScreenshot.ts), not source documents - they share this bucket but
-    // must not show up as "documents" in the admin list.
-    const sourceObjects = listed.objects.filter((obj) => !obj.key.startsWith("page-images/"));
+    // page-images/ objects are captured page screenshots and cleaned/
+    // objects are standalone enriched-text artifacts (see pageScreenshot.ts
+    // and ingestion.ts) - neither is a source document, so both share this
+    // bucket but must not show up as "documents" in the admin list.
+    const sourceObjects = listed.objects.filter(
+      (obj) => !obj.key.startsWith("page-images/") && !obj.key.startsWith("cleaned/")
+    );
 
     const documents = sourceObjects.map((obj) => ({
       name: obj.key,
@@ -161,5 +164,24 @@ export async function handleAdminPutConfig(request: Request, env: Env): Promise<
     return Response.json({ config });
   } catch (err) {
     return adminErrorResponse("/admin/config", err);
+  }
+}
+
+export async function handleAdminGetCleanedDocument(request: Request, env: Env): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const name = url.searchParams.get("name");
+    if (!name) {
+      return Response.json({ error: "Expected a 'name' query parameter" }, { status: 400 });
+    }
+
+    const object = await env.PDF_BUCKET.get(`cleaned/${name}.md`);
+    if (!object) {
+      return Response.json({ error: "No cleaned text available for this document" }, { status: 404 });
+    }
+
+    return Response.json({ name, text: await object.text() });
+  } catch (err) {
+    return adminErrorResponse("/admin/documents/cleaned", err);
   }
 }

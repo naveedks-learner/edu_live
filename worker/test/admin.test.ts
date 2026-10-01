@@ -6,6 +6,7 @@ import {
   handleAdminCosting,
   handleAdminGetConfig,
   handleAdminPutConfig,
+  handleAdminGetCleanedDocument,
 } from "../src/admin";
 import type { Env } from "../src/index";
 
@@ -73,6 +74,24 @@ describe("handleAdminDocuments", () => {
           objects: [
             { key: "notes.pdf", size: 1234, customMetadata: { chunkCount: "2", pageCount: "3", indexedAt: "2026-01-01" } },
             { key: "page-images/notes.pdf/2.png", size: 500, customMetadata: undefined },
+          ],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { name: string }[] };
+
+    expect(body.documents.map((d) => d.name)).toEqual(["notes.pdf"]);
+  });
+
+  it("excludes cleaned/ enriched-text artifacts from the document list", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [
+            { key: "notes.pdf", size: 1234, customMetadata: { chunkCount: "2", pageCount: "3", indexedAt: "2026-01-01" } },
+            { key: "cleaned/notes.pdf.md", size: 800, customMetadata: undefined },
           ],
         }),
       } as unknown as Env["PDF_BUCKET"],
@@ -514,5 +533,45 @@ describe("handleAdminPutConfig", () => {
     expect(response.status).toBe(200);
     expect(written.length).toBe(1);
     expect(body.config.topK).toBe(7);
+  });
+});
+
+describe("handleAdminGetCleanedDocument", () => {
+  function req(name: string) {
+    return new Request(`https://worker.example/admin/documents/cleaned?name=${encodeURIComponent(name)}`);
+  }
+
+  it("returns the cleaned text for a document that has one", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        get: async (key: string) => {
+          expect(key).toBe("cleaned/notes.pdf.md");
+          return { text: async () => "# Page 1\n\nEnriched text" } as unknown as R2ObjectBody;
+        },
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminGetCleanedDocument(req("notes.pdf"), env);
+    const body = (await response.json()) as { name: string; text: string };
+
+    expect(response.status).toBe(200);
+    expect(body.name).toBe("notes.pdf");
+    expect(body.text).toBe("# Page 1\n\nEnriched text");
+  });
+
+  it("returns 404 when the document has no cleaned text (enrichment never applied)", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: { get: async () => null } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminGetCleanedDocument(req("old-notes.pdf"), env);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 400 when the name query param is missing", async () => {
+    const env = makeEnv();
+    const response = await handleAdminGetCleanedDocument(new Request("https://worker.example/admin/documents/cleaned"), env);
+    expect(response.status).toBe(400);
   });
 });

@@ -9,6 +9,7 @@ import {
   handleAdminCosting,
   handleAdminGetConfig,
   handleAdminPutConfig,
+  handleAdminGetCleanedDocument,
 } from "./admin";
 
 export interface Env {
@@ -53,6 +54,10 @@ export default {
     if (request.method === "GET" && url.pathname === "/admin/documents") {
       if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
       return withCors(await handleAdminDocuments(env));
+    }
+    if (request.method === "GET" && url.pathname === "/admin/documents/cleaned") {
+      if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));
+      return withCors(await handleAdminGetCleanedDocument(request, env));
     }
     if (request.method === "GET" && url.pathname === "/admin/transactions") {
       if (!isAdminAuthorized(request, env)) return withCors(Response.json({ error: "Unauthorized" }, { status: 401 }));

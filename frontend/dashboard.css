@@ -324,6 +324,22 @@ details.io-block pre {
 .txn-summary-question { font-weight: 600; font-size: 1rem; }
 .txn-summary-meta { font-size: 0.82rem; color: var(--text-muted); }
 
+.upload-status-success { color: var(--pill-kept-text); font-weight: 600; }
+.upload-status-error { color: var(--pill-error-text); font-weight: 600; }
+
+pre.cleaned-text-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  max-height: 400px;
+  overflow: auto;
+  margin-top: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }

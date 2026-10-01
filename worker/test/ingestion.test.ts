@@ -272,6 +272,60 @@ describe("handleIngest page screenshot capture", () => {
     expect(sourcePut[2].customMetadata.enriched).toBe("true");
   });
 
+  it("stores the enriched per-page text as a standalone cleaned/<name>.md artifact when enrichment applied", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
+      { page: 1, text: "Enriched markdown for page one." },
+      { page: 2, text: "Enriched markdown for page two." },
+    ]);
+
+    const putCalls: unknown[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      PDF_BUCKET: {
+        head: async () => null,
+        put: async (...args: unknown[]) => {
+          putCalls.push(args);
+        },
+      } as unknown as R2Bucket,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    const cleanedPut = putCalls.find((call) => (call as unknown[])[0] === "cleaned/notes.pdf.md") as [
+      string,
+      string,
+      { httpMetadata?: { contentType?: string } }
+    ];
+    expect(cleanedPut).toBeDefined();
+    expect(cleanedPut[1]).toContain("Enriched markdown for page one.");
+    expect(cleanedPut[1]).toContain("Enriched markdown for page two.");
+    expect(cleanedPut[2]?.httpMetadata?.contentType).toBe("text/markdown");
+  });
+
+  it("does not store a cleaned/<name>.md artifact when enrichment did not apply (fell back to plain text)", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockImplementationOnce(async (_pdfBytes, fallbackPages) => fallbackPages);
+
+    const putCalls: unknown[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      PDF_BUCKET: {
+        head: async () => null,
+        put: async (...args: unknown[]) => {
+          putCalls.push(args);
+        },
+      } as unknown as R2Bucket,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    const cleanedPut = putCalls.find((call) => (call as unknown[])[0] === "cleaned/notes.pdf.md");
+    expect(cleanedPut).toBeUndefined();
+  });
+
   it("does not launch a browser or capture any screenshot when no page contains a [Figure: marker", async () => {
     vi.mocked(capturePageScreenshot).mockClear();
     vi.mocked(launchScreenshotBrowser).mockClear();
