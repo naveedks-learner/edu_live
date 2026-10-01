@@ -1,6 +1,6 @@
 import type { JevScoredChunk } from "./jev";
 
-export type PathTaken = "pdf_only" | "web_fallback";
+export type PathTaken = "pdf_only" | "web_fallback" | "concept_explainer";
 
 export interface RetrievalTraceEntry {
   rank: number;
