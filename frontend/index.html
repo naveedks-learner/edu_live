@@ -28,7 +28,11 @@
 
   <main class="app-main">
     <section class="card" id="chat-section">
-      <h2>Ask a question</h2>
+      <div class="mode-toggle" role="tablist">
+        <button type="button" class="mode-btn active" data-mode="chat" role="tab" aria-selected="true">Chat</button>
+        <button type="button" class="mode-btn" data-mode="explain" role="tab" aria-selected="false">Concept Explainer</button>
+      </div>
+      <h2 id="chat-section-title">Ask a question</h2>
       <div id="chat-log"></div>
       <form id="chat-form">
         <select id="answer-style-select" title="Answer length">

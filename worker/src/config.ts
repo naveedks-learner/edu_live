@@ -3,6 +3,7 @@ import { DEFAULT_OPENROUTER_MODEL } from "./llm";
 
 export type WebSearchMode = "rag_only" | "rag_web_fallback";
 export type LlmProvider = "openrouter" | "workers-ai";
+export type ExplainRetrievalMode = "rag_fallback" | "rag_plus_llm";
 
 export interface RuntimeConfig {
   topK: number;
@@ -16,6 +17,8 @@ export interface RuntimeConfig {
   jevRelevanceThreshold: number;
   ingestionEnrichmentEnabled: boolean;
   ingestionModelSlug: string;
+  explainRetrievalMode: ExplainRetrievalMode;
+  conceptExplainerEnabled: boolean;
 }
 
 // Must match the pre-existing hardcoded behavior exactly, so shipping this
@@ -40,6 +43,8 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   jevRelevanceThreshold: 1.5,
   ingestionEnrichmentEnabled: true,
   ingestionModelSlug: "google/gemini-2.5-flash",
+  explainRetrievalMode: "rag_plus_llm",
+  conceptExplainerEnabled: true,
 };
 
 export function parseConfigRows(rows: { key: string; value: string }[]): RuntimeConfig {
@@ -66,6 +71,11 @@ export function parseConfigRows(rows: { key: string; value: string }[]): Runtime
       ? map.get("ingestionEnrichmentEnabled") === "true"
       : DEFAULT_CONFIG.ingestionEnrichmentEnabled,
     ingestionModelSlug: map.get("ingestionModelSlug") ?? DEFAULT_CONFIG.ingestionModelSlug,
+    explainRetrievalMode:
+      (map.get("explainRetrievalMode") as ExplainRetrievalMode | undefined) ?? DEFAULT_CONFIG.explainRetrievalMode,
+    conceptExplainerEnabled: map.has("conceptExplainerEnabled")
+      ? map.get("conceptExplainerEnabled") === "true"
+      : DEFAULT_CONFIG.conceptExplainerEnabled,
   };
 }
 
@@ -81,6 +91,8 @@ const KNOWN_FIELDS = new Set([
   "jevRelevanceThreshold",
   "ingestionEnrichmentEnabled",
   "ingestionModelSlug",
+  "explainRetrievalMode",
+  "conceptExplainerEnabled",
 ]);
 
 // Cloudflare Vectorize rejects a query above its own topK ceiling, and a
@@ -147,6 +159,17 @@ export function validateConfigUpdate(input: Record<string, unknown>): { field: s
     if (typeof v !== "string" || v.trim().length === 0) {
       errors.push({ field: "ingestionModelSlug", message: "ingestionModelSlug must be a non-empty string" });
     }
+  }
+  if ("explainRetrievalMode" in input) {
+    if (input.explainRetrievalMode !== "rag_fallback" && input.explainRetrievalMode !== "rag_plus_llm") {
+      errors.push({
+        field: "explainRetrievalMode",
+        message: "explainRetrievalMode must be 'rag_fallback' or 'rag_plus_llm'",
+      });
+    }
+  }
+  if ("conceptExplainerEnabled" in input && typeof input.conceptExplainerEnabled !== "boolean") {
+    errors.push({ field: "conceptExplainerEnabled", message: "conceptExplainerEnabled must be a boolean" });
   }
 
   return errors;

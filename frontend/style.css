@@ -157,6 +157,59 @@ button:focus-visible, select:focus-visible, input:focus-visible {
   border: 1px solid var(--border);
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.mode-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: var(--brand-start);
+  color: #fff;
+}
+
+.explain-section {
+  margin: 0.75rem 0;
+}
+
+.explain-section strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.formula-box {
+  background: var(--surface-2);
+  border-left: 3px solid var(--brand-start);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+
+.formula-text {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+}
+
+.explain-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.explain-table th,
+.explain-table td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+
 @media (max-width: 640px) {
   .app-main { padding: 1rem; }
   .app-header-inner { flex-direction: column; }

@@ -20,6 +20,8 @@ describe("parseConfigRows", () => {
       { key: "jevRelevanceThreshold", value: "1.5" },
       { key: "ingestionEnrichmentEnabled", value: "false" },
       { key: "ingestionModelSlug", value: "some/vision-model" },
+      { key: "explainRetrievalMode", value: "rag_fallback" },
+      { key: "conceptExplainerEnabled", value: "false" },
     ]);
 
     expect(result).toEqual({
@@ -34,6 +36,8 @@ describe("parseConfigRows", () => {
       jevRelevanceThreshold: 1.5,
       ingestionEnrichmentEnabled: false,
       ingestionModelSlug: "some/vision-model",
+      explainRetrievalMode: "rag_fallback",
+      conceptExplainerEnabled: false,
     });
   });
 
@@ -147,5 +151,37 @@ describe("getRuntimeConfig", () => {
   it("returns defaults (never throws) when EDU_LIVE_DB itself is missing", async () => {
     const env = {} as unknown as Env;
     expect(await getRuntimeConfig(env)).toEqual(DEFAULT_CONFIG);
+  });
+});
+
+describe("explainRetrievalMode and conceptExplainerEnabled", () => {
+  it("defaults explainRetrievalMode to rag_plus_llm and conceptExplainerEnabled to true when absent from D1", () => {
+    const config = parseConfigRows([]);
+    expect(config.explainRetrievalMode).toBe("rag_plus_llm");
+    expect(config.conceptExplainerEnabled).toBe(true);
+  });
+
+  it("parses explainRetrievalMode and conceptExplainerEnabled from D1 rows", () => {
+    const config = parseConfigRows([
+      { key: "explainRetrievalMode", value: "rag_fallback" },
+      { key: "conceptExplainerEnabled", value: "false" },
+    ]);
+    expect(config.explainRetrievalMode).toBe("rag_fallback");
+    expect(config.conceptExplainerEnabled).toBe(false);
+  });
+
+  it("rejects an invalid explainRetrievalMode value", () => {
+    const errors = validateConfigUpdate({ explainRetrievalMode: "not_a_mode" });
+    expect(errors.some((e) => e.field === "explainRetrievalMode")).toBe(true);
+  });
+
+  it("rejects a non-boolean conceptExplainerEnabled value", () => {
+    const errors = validateConfigUpdate({ conceptExplainerEnabled: "yes" });
+    expect(errors.some((e) => e.field === "conceptExplainerEnabled")).toBe(true);
+  });
+
+  it("accepts a valid explainRetrievalMode and conceptExplainerEnabled update", () => {
+    const errors = validateConfigUpdate({ explainRetrievalMode: "rag_plus_llm", conceptExplainerEnabled: true });
+    expect(errors.length).toBe(0);
   });
 });

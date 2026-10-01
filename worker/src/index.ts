@@ -1,5 +1,6 @@
 import { handleIngest } from "./ingestion";
 import { handleChat } from "./chat";
+import { handleExplain } from "./explain";
 import { handleGetImage } from "./images";
 import { withCors, handleCorsPreflight } from "./cors";
 import {
@@ -46,6 +47,9 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/chat") {
       return withCors(await handleChat(request, env, ctx));
+    }
+    if (request.method === "POST" && url.pathname === "/explain") {
+      return withCors(await handleExplain(request, env, ctx));
     }
     if (request.method === "GET" && url.pathname.startsWith("/images/")) {
       const key = decodeURIComponent(url.pathname.slice("/images/".length));
