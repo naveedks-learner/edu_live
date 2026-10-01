@@ -48,6 +48,16 @@ describe("parseEnrichedPages", () => {
     const result = parseEnrichedPages("no markers here, just prose", FALLBACK);
     expect(result).toEqual(FALLBACK);
   });
+
+  it("drops the last page's parsed content (falling back to plain text for it) when truncated=true, since a cut-off response's last page is likely incomplete", () => {
+    const response = "<<<PAGE 1>>>\nFirst page markdown\n<<<PAGE 2>>>\nSecond page markdown\n<<<PAGE 3>>>\nThird page cut off mid";
+    const result = parseEnrichedPages(response, FALLBACK, true);
+    expect(result).toEqual([
+      { page: 1, text: "First page markdown" },
+      { page: 2, text: "Second page markdown" },
+      { page: 3, text: "plain text page three" },
+    ]);
+  });
 });
 
 describe("enrichPdfToMarkdown", () => {
@@ -81,6 +91,53 @@ describe("enrichPdfToMarkdown", () => {
       const fileParts = body.messages[0].content.filter((c) => c.type === "file");
       expect(fileParts.length).toBe(1);
       expect(fileParts[0].file?.file_data.startsWith("data:application/pdf;base64,")).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("drops the last parsed page and falls back to its plain text when the response is truncated (finish_reason: length)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "length",
+              message: { content: "<<<PAGE 1>>>\nEnriched one\n<<<PAGE 2>>>\nEnriched two\n<<<PAGE 3>>>\nEnriched three but cut" },
+            },
+          ],
+        }),
+        { status: 200 }
+      );
+
+    try {
+      const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake bytes").buffer;
+      const env = makeEnv();
+      const result = await enrichPdfToMarkdown(pdfBytes, FALLBACK, env, { ingestionModelSlug: DEFAULT_INGESTION_MODEL });
+      expect(result).toEqual([
+        { page: 1, text: "Enriched one" },
+        { page: 2, text: "Enriched two" },
+        { page: 3, text: "plain text page three" },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("passes an AbortSignal-based timeout to fetch so a hung upstream call doesn't hold the request forever", async () => {
+    let capturedInit: RequestInit | undefined;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response(JSON.stringify({ choices: [{ message: { content: "<<<PAGE 1>>>\nx" } }] }), { status: 200 });
+    };
+
+    try {
+      const pdfBytes = new TextEncoder().encode("%PDF-1.4 fake bytes").buffer;
+      const env = makeEnv();
+      await enrichPdfToMarkdown(pdfBytes, FALLBACK, env, { ingestionModelSlug: DEFAULT_INGESTION_MODEL });
+      expect(capturedInit?.signal).toBeInstanceOf(AbortSignal);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -3,7 +3,7 @@ import { extractPdfPages } from "./pdf";
 import { chunkText } from "./chunker";
 import { chunkVectorId } from "./vectorId";
 import { enrichPdfToMarkdown } from "./ingestionEnrichment";
-import { capturePageScreenshot } from "./pageScreenshot";
+import { capturePageScreenshot, launchScreenshotBrowser } from "./pageScreenshot";
 import { getRuntimeConfig } from "./config";
 
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
@@ -55,18 +55,35 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
   }
 
   const config = await getRuntimeConfig(env);
+  // enrichPdfToMarkdown returns the exact fallbackPages reference on any
+  // failure (never throws, per its own contract) and a freshly-built array
+  // on success - comparing references (rather than adding a second return
+  // value) is enough to know whether enrichment actually took effect, for
+  // the R2 customMetadata.enriched flag surfaced in /admin/documents.
+  let enrichmentApplied = false;
   if (config.ingestionEnrichmentEnabled) {
-    pages = await enrichPdfToMarkdown(pdfBytes, pages, env, config);
+    const enrichedPages = await enrichPdfToMarkdown(pdfBytes, pages, env, config);
+    enrichmentApplied = enrichedPages !== pages;
+    pages = enrichedPages;
   }
 
   const pageImageKeys = new Map<number, string>();
   const figurePages = pages.filter((p) => p.text.includes("[Figure:")).map((p) => p.page);
-  for (const pageNumber of figurePages) {
-    const screenshot = await capturePageScreenshot(pdfBytes, pageNumber, env);
-    if (!screenshot) continue;
-    const key = `page-images/${file.name}/${pageNumber}.png`;
-    await env.PDF_BUCKET.put(key, screenshot, { httpMetadata: { contentType: "image/png" } });
-    pageImageKeys.set(pageNumber, key);
+  if (figurePages.length > 0) {
+    const browser = await launchScreenshotBrowser(env);
+    if (browser) {
+      try {
+        for (const pageNumber of figurePages) {
+          const screenshot = await capturePageScreenshot(browser, pdfBytes, pageNumber);
+          if (!screenshot) continue;
+          const key = `page-images/${file.name}/${pageNumber}.png`;
+          await env.PDF_BUCKET.put(key, screenshot, { httpMetadata: { contentType: "image/png" } });
+          pageImageKeys.set(pageNumber, key);
+        }
+      } finally {
+        await browser.close().catch(() => {});
+      }
+    }
   }
 
   const chunks = chunkText(pages, file.name);
@@ -106,6 +123,7 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
         chunkCount: String(chunks.length),
         pageCount: String(pages.length),
         indexedAt: new Date().toISOString(),
+        enriched: String(enrichmentApplied),
       },
     });
   } catch (err) {

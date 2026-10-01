@@ -38,12 +38,16 @@ function buildPrompt(): string {
  * falls back to that page's plain-text content, so a partially-broken
  * response never loses a page outright.
  */
-export function parseEnrichedPages(responseText: string, fallbackPages: PageText[]): PageText[] {
+export function parseEnrichedPages(responseText: string, fallbackPages: PageText[], truncated = false): PageText[] {
   const fallbackPageNumbers = new Set(fallbackPages.map((p) => p.page));
   const parsed = new Map<number, string>();
 
   const matches = [...responseText.matchAll(PAGE_MARKER)];
   for (let i = 0; i < matches.length; i++) {
+    // A truncated response was cut off mid-output-limit - its last page is
+    // likely incomplete, so drop it and let that page fall back to its
+    // plain-text content rather than index a half-written fragment.
+    if (truncated && i === matches.length - 1) continue;
     const pageNum = Number(matches[i][1]);
     if (!fallbackPageNumbers.has(pageNum)) continue; // discard out-of-range markers
     const contentStart = matches[i].index! + matches[i][0].length;
@@ -90,6 +94,10 @@ export async function enrichPdfToMarkdown(
           },
         ],
       }),
+      // A hung upstream call would otherwise hold the synchronous /ingest
+      // request open indefinitely - 60s is generous for a whole-PDF vision
+      // call but still bounded.
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!response.ok) {
@@ -97,14 +105,18 @@ export async function enrichPdfToMarkdown(
       return fallbackPages;
     }
 
-    const body = (await response.json()) as { choices: { message: { content: string } }[] };
+    const body = (await response.json()) as { choices: { message: { content: string }; finish_reason?: string }[] };
     const content = body.choices?.[0]?.message?.content;
     if (!content) {
       console.error("ingestion enrichment returned no content, falling back to plain text");
       return fallbackPages;
     }
 
-    return parseEnrichedPages(content, fallbackPages);
+    const truncated = body.choices?.[0]?.finish_reason === "length";
+    if (truncated) {
+      console.error("ingestion enrichment response was truncated (finish_reason: length), dropping its last page");
+    }
+    return parseEnrichedPages(content, fallbackPages, truncated);
   } catch (err) {
     console.error("ingestion enrichment call failed, falling back to plain text", err);
     return fallbackPages;

@@ -146,8 +146,9 @@ async function loadDocumentsTab() {
           <td>${doc.indexedAt ? new Date(doc.indexedAt).toLocaleString() : "—"}</td>
           <td>${doc.pageCount ?? "—"}</td>
           <td>${doc.chunkCount ?? "—"}</td>
+          <td>${doc.enriched === null ? "—" : doc.enriched ? "Yes" : "No"}</td>
         </tr>
-        <tr class="chunk-row"><td colspan="5">${chunkSection}</td></tr>`;
+        <tr class="chunk-row"><td colspan="6">${chunkSection}</td></tr>`;
       })
       .join("");
 
@@ -163,7 +164,7 @@ async function loadDocumentsTab() {
         <h2>Indexed documents</h2>
         <p class="txn-meta">Chunk text shown for the ${chunkPreviewCount ?? 0} most recently indexed document(s) only.</p>
         <table>
-          <thead><tr><th>File</th><th>Size</th><th>Indexed</th><th>Pages</th><th>Chunks</th></tr></thead>
+          <thead><tr><th>File</th><th>Size</th><th>Indexed</th><th>Pages</th><th>Chunks</th><th>Enriched</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -338,7 +339,7 @@ async function loadSettingsTab() {
       </div>
       <div class="card">
         <h2>Ingestion enrichment</h2>
-        <p class="txn-meta">Extracts formulas, tables, and figures from uploaded PDFs via a vision-capable model before chunking. Applies to documents uploaded after this is enabled - existing documents need re-upload to benefit.</p>
+        <p class="txn-meta">Extracts formulas, tables, and figures from uploaded PDFs via a vision-capable model before chunking. Applies to documents uploaded after this is enabled - ingestion skips a filename it already has, so an already-indexed document won't get enrichment just by re-uploading it under the same name.</p>
         <form id="ingestion-form" class="settings-form">
           <label class="checkbox-row"><input type="checkbox" name="ingestionEnrichmentEnabled" ${config.ingestionEnrichmentEnabled ? "checked" : ""} /> Enrichment enabled</label>
           <label>Model (slug)

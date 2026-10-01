@@ -15,13 +15,18 @@ function adminErrorResponse(routeName: string, err: unknown): Response {
 export async function handleAdminDocuments(env: Env): Promise<Response> {
   try {
     const listed = await env.PDF_BUCKET.list({ include: ["customMetadata"] });
+    // page-images/ objects are captured page screenshots (see
+    // pageScreenshot.ts), not source documents - they share this bucket but
+    // must not show up as "documents" in the admin list.
+    const sourceObjects = listed.objects.filter((obj) => !obj.key.startsWith("page-images/"));
 
-    const documents = listed.objects.map((obj) => ({
+    const documents = sourceObjects.map((obj) => ({
       name: obj.key,
       sizeBytes: obj.size,
       indexedAt: obj.customMetadata?.indexedAt ?? null,
       chunkCount: obj.customMetadata?.chunkCount ? Number(obj.customMetadata.chunkCount) : null,
       pageCount: obj.customMetadata?.pageCount ? Number(obj.customMetadata.pageCount) : null,
+      enriched: obj.customMetadata?.enriched === undefined ? null : obj.customMetadata.enriched === "true",
     }));
 
     const eligible = documents.filter((d) => d.indexedAt && d.chunkCount);

@@ -35,4 +35,27 @@ describe("handleGetImage", () => {
     const response = await handleGetImage("page-images/missing.pdf/1.png", env);
     expect(response.status).toBe(404);
   });
+
+  it("returns 404 without touching R2 for a key outside the page-images/ prefix, so this route can't be used to download the source PDFs", async () => {
+    let getCalled = false;
+    const env = makeEnv({
+      PDF_BUCKET: {
+        get: async () => {
+          getCalled = true;
+          return { arrayBuffer: async () => new ArrayBuffer(0) } as unknown as R2ObjectBody;
+        },
+      } as unknown as R2Bucket,
+    });
+
+    const response = await handleGetImage("notes.pdf", env);
+
+    expect(response.status).toBe(404);
+    expect(getCalled).toBe(false);
+  });
+
+  it("returns 404 for a page-images/ key that doesn't end in .png", async () => {
+    const env = makeEnv();
+    const response = await handleGetImage("page-images/notes.pdf/../../notes.pdf", env);
+    expect(response.status).toBe(404);
+  });
 });

@@ -66,6 +66,60 @@ describe("handleAdminDocuments", () => {
     expect(receivedOptions).toEqual({ include: ["customMetadata"] });
   });
 
+  it("excludes page-images/ screenshot objects from the document list", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [
+            { key: "notes.pdf", size: 1234, customMetadata: { chunkCount: "2", pageCount: "3", indexedAt: "2026-01-01" } },
+            { key: "page-images/notes.pdf/2.png", size: 500, customMetadata: undefined },
+          ],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { name: string }[] };
+
+    expect(body.documents.map((d) => d.name)).toEqual(["notes.pdf"]);
+  });
+
+  it("surfaces the enriched flag so admins can see which documents got PDF content enrichment", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [
+            {
+              key: "notes.pdf",
+              size: 1234,
+              customMetadata: { chunkCount: "2", pageCount: "3", indexedAt: "2026-01-01", enriched: "true" },
+            },
+          ],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { enriched: boolean | null }[] };
+
+    expect(body.documents[0].enriched).toBe(true);
+  });
+
+  it("renders enriched as null for pre-migration PDFs with no enriched customMetadata", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: {
+        list: async () => ({
+          objects: [{ key: "old-notes.pdf", size: 1234, customMetadata: undefined }],
+        }),
+      } as unknown as Env["PDF_BUCKET"],
+    });
+
+    const response = await handleAdminDocuments(env);
+    const body = (await response.json()) as { documents: { enriched: boolean | null }[] };
+
+    expect(body.documents[0].enriched).toBeNull();
+  });
+
   it("renders null for missing customMetadata fields (pre-migration PDFs)", async () => {
     const env = makeEnv({
       PDF_BUCKET: {

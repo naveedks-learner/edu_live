@@ -1,4 +1,4 @@
-import puppeteer from "@cloudflare/puppeteer";
+import puppeteer, { type Browser } from "@cloudflare/puppeteer";
 import type { Env } from "./index";
 
 function base64FromArrayBuffer(buf: ArrayBuffer): string {
@@ -9,32 +9,54 @@ function base64FromArrayBuffer(buf: ArrayBuffer): string {
 }
 
 /**
- * Screenshots one page of a PDF using Cloudflare Browser Rendering -
- * Chromium's built-in PDF viewer renders the page (including any embedded
- * image, even one nested inside a table cell) exactly as laid out, so we
- * never have to solve PDF rasterization ourselves. Never throws: any
- * failure (no browser session available, navigation timeout, screenshot
+ * Launches one Browser Rendering session to be reused across every figure
+ * page in a single ingest (capturePageScreenshot opens/closes a page per
+ * call, not a browser per call) - Browser Rendering caps launches per
+ * minute more tightly than plain fetch concurrency, so launching once per
+ * document instead of once per figure page matters for any multi-figure
+ * PDF. Never throws: returns null on failure so ingestion can skip
+ * screenshot capture entirely rather than fail.
+ */
+export async function launchScreenshotBrowser(env: Env): Promise<Browser | null> {
+  try {
+    return await puppeteer.launch(env.BROWSER);
+  } catch (err) {
+    console.error("browser rendering launch failed", err);
+    return null;
+  }
+}
+
+/**
+ * Screenshots one page of a PDF on an already-launched browser, using
+ * Cloudflare Browser Rendering - Chromium's built-in PDF viewer renders the
+ * page (including any embedded image, even one nested inside a table cell)
+ * exactly as laid out, so we never have to solve PDF rasterization
+ * ourselves. Never throws: any failure (navigation timeout, screenshot
  * error) returns null, since a failed screenshot must not block ingestion -
  * the page's Markdown-enriched text (with its [Figure: ...] description) is
- * still indexed either way.
+ * still indexed either way. Only the page is closed here, not the browser -
+ * the caller (which launched it via launchScreenshotBrowser) owns closing
+ * the browser once after all figure pages are done.
  */
 export async function capturePageScreenshot(
+  browser: Browser,
   pdfBytes: ArrayBuffer,
-  pageNumber: number,
-  env: Env
+  pageNumber: number
 ): Promise<ArrayBuffer | null> {
-  let browser;
+  let page;
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
+    page = await browser.newPage();
     const dataUrl = `data:application/pdf;base64,${base64FromArrayBuffer(pdfBytes)}#page=${pageNumber}`;
-    await page.goto(dataUrl);
-    const screenshot = await page.screenshot();
+    // networkidle0 (rather than the default "load") waits for the PDF
+    // viewer's own rendering to settle before screenshotting - screenshotting
+    // immediately on "load" can capture a blank or toolbar-only frame.
+    await page.goto(dataUrl, { waitUntil: "networkidle0" });
+    const screenshot = await page.screenshot({ fullPage: true });
     return screenshot as unknown as ArrayBuffer;
   } catch (err) {
     console.error(`page screenshot failed for page ${pageNumber}`, err);
     return null;
   } finally {
-    await browser?.close().catch(() => {});
+    await page?.close().catch(() => {});
   }
 }

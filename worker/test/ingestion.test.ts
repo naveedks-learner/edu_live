@@ -18,11 +18,12 @@ vi.mock("../src/ingestionEnrichment", () => ({
 }));
 
 vi.mock("../src/pageScreenshot", () => ({
+  launchScreenshotBrowser: vi.fn(async () => ({ close: vi.fn(async () => {}) })),
   capturePageScreenshot: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
 }));
 
 import { enrichPdfToMarkdown } from "../src/ingestionEnrichment";
-import { capturePageScreenshot } from "../src/pageScreenshot";
+import { capturePageScreenshot, launchScreenshotBrowser } from "../src/pageScreenshot";
 
 type ConfigRow = { key: string; value: string };
 
@@ -165,6 +166,7 @@ describe("handleIngest enrichment wiring", () => {
 describe("handleIngest page screenshot capture", () => {
   it("captures a screenshot for any page whose enriched text contains a [Figure: marker, and stores it in R2", async () => {
     vi.mocked(capturePageScreenshot).mockClear();
+    vi.mocked(launchScreenshotBrowser).mockClear();
     vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
       { page: 1, text: "Plain prose, no figures here." },
       { page: 2, text: "Some text.\n[Figure: a labeled diagram of the eye]\nMore text." },
@@ -185,8 +187,9 @@ describe("handleIngest page screenshot capture", () => {
 
     await handleIngest(makeUploadRequest(), env);
 
+    expect(launchScreenshotBrowser).toHaveBeenCalledTimes(1);
     expect(capturePageScreenshot).toHaveBeenCalledTimes(1);
-    const [, pageArg] = vi.mocked(capturePageScreenshot).mock.calls[0];
+    const [, , pageArg] = vi.mocked(capturePageScreenshot).mock.calls[0];
     expect(pageArg).toBe(2);
 
     // second put call is the page-image write (first is the source PDF write)
@@ -194,8 +197,84 @@ describe("handleIngest page screenshot capture", () => {
     expect(imagePut).toBeDefined();
   });
 
-  it("does not capture any screenshot when no page contains a [Figure: marker", async () => {
+  it("launches the browser only once even with multiple figure pages", async () => {
     vi.mocked(capturePageScreenshot).mockClear();
+    vi.mocked(launchScreenshotBrowser).mockClear();
+    vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
+      { page: 1, text: "Some text.\n[Figure: diagram one]\nMore text." },
+      { page: 2, text: "Some text.\n[Figure: diagram two]\nMore text." },
+    ]);
+
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    expect(launchScreenshotBrowser).toHaveBeenCalledTimes(1);
+    expect(capturePageScreenshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("records enriched=false in R2 customMetadata when enrichPdfToMarkdown falls back unchanged", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockImplementationOnce(async (_pdfBytes, fallbackPages) => fallbackPages);
+
+    const putCalls: unknown[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      PDF_BUCKET: {
+        head: async () => null,
+        put: async (...args: unknown[]) => {
+          putCalls.push(args);
+        },
+      } as unknown as R2Bucket,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    const sourcePut = putCalls.find((call) => (call as unknown[])[0] === "notes.pdf") as [
+      string,
+      ArrayBuffer,
+      { customMetadata: Record<string, string> }
+    ];
+    expect(sourcePut[2].customMetadata.enriched).toBe("false");
+  });
+
+  it("records enriched=true in R2 customMetadata when enrichPdfToMarkdown returns different content", async () => {
+    vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
+      { page: 1, text: "Enriched markdown for page one." },
+      { page: 2, text: "Enriched markdown for page two." },
+    ]);
+
+    const putCalls: unknown[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      PDF_BUCKET: {
+        head: async () => null,
+        put: async (...args: unknown[]) => {
+          putCalls.push(args);
+        },
+      } as unknown as R2Bucket,
+      EDU_LIVE_DB: makeMockDb([{ key: "ingestionEnrichmentEnabled", value: "true" }]),
+    });
+
+    await handleIngest(makeUploadRequest(), env);
+
+    const sourcePut = putCalls.find((call) => (call as unknown[])[0] === "notes.pdf") as [
+      string,
+      ArrayBuffer,
+      { customMetadata: Record<string, string> }
+    ];
+    expect(sourcePut[2].customMetadata.enriched).toBe("true");
+  });
+
+  it("does not launch a browser or capture any screenshot when no page contains a [Figure: marker", async () => {
+    vi.mocked(capturePageScreenshot).mockClear();
+    vi.mocked(launchScreenshotBrowser).mockClear();
     vi.mocked(enrichPdfToMarkdown).mockResolvedValueOnce([
       { page: 1, text: "Plain prose." },
       { page: 2, text: "More plain prose." },
@@ -209,6 +288,7 @@ describe("handleIngest page screenshot capture", () => {
 
     await handleIngest(makeUploadRequest(), env);
 
+    expect(launchScreenshotBrowser).not.toHaveBeenCalled();
     expect(capturePageScreenshot).not.toHaveBeenCalled();
   });
 });
