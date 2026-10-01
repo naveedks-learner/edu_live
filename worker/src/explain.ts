@@ -87,39 +87,66 @@ interface ParsedLlmExplanation {
  * fall back to a raw-text-only explanation rather than failing the request,
  * same "never throws" posture as parseEnrichedPages in ingestionEnrichment.ts.
  */
+/**
+ * Every row must itself be an array of strings - an LLM that emits a row as
+ * an object (or any non-array) would otherwise pass the table through to the
+ * frontend's row.forEach(cell => ...) renderer, which throws and wipes out
+ * the entire rendered explanation, not just the table.
+ */
+function isValidTable(value: unknown): value is { headers: string[]; rows: string[][] } {
+  if (!value || typeof value !== "object") return false;
+  const headers = (value as { headers?: unknown }).headers;
+  const rows = (value as { rows?: unknown }).rows;
+  if (!Array.isArray(headers) || !headers.every((h) => typeof h === "string")) return false;
+  if (!Array.isArray(rows)) return false;
+  return rows.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"));
+}
+
+/**
+ * Strips any ```json / ``` fence markers so a truncated, unlabeled, or
+ * otherwise unusable LLM response never shows raw fence syntax to the
+ * student - the fallback text should read as prose, not as leaked markup.
+ */
+function stripFenceMarkers(text: string): string {
+  return text.replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
 function parseExplainLlmResponse(rawText: string, concept: string): ParsedLlmExplanation {
+  const fallback = (): ParsedLlmExplanation => ({
+    concept,
+    simpleExplanation: stripFenceMarkers(rawText),
+    steps: null,
+    formula: null,
+    definition: null,
+    table: null,
+    realWorldExample: null,
+  });
+
   const fenceMatch = rawText.match(/```json\s*([\s\S]*?)```/i);
   const jsonText = fenceMatch ? fenceMatch[1] : rawText;
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-    const simpleExplanation = typeof parsed.simpleExplanation === "string" ? parsed.simpleExplanation : rawText.trim();
-    return {
-      concept: typeof parsed.concept === "string" ? parsed.concept : concept,
-      simpleExplanation,
-      steps: Array.isArray(parsed.steps) && parsed.steps.every((s) => typeof s === "string") ? (parsed.steps as string[]) : null,
-      formula: typeof parsed.formula === "string" ? parsed.formula : null,
-      definition: typeof parsed.definition === "string" ? parsed.definition : null,
-      table:
-        parsed.table &&
-        typeof parsed.table === "object" &&
-        Array.isArray((parsed.table as { headers?: unknown }).headers) &&
-        Array.isArray((parsed.table as { rows?: unknown }).rows)
-          ? (parsed.table as { headers: string[]; rows: string[][] })
-          : null,
-      realWorldExample: typeof parsed.realWorldExample === "string" ? parsed.realWorldExample : null,
-    };
+    parsed = JSON.parse(jsonText);
   } catch {
-    return {
-      concept,
-      simpleExplanation: rawText.trim(),
-      steps: null,
-      formula: null,
-      definition: null,
-      table: null,
-      realWorldExample: null,
-    };
+    return fallback();
   }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return fallback();
+  }
+
+  const p = parsed as Record<string, unknown>;
+  const simpleExplanation = typeof p.simpleExplanation === "string" ? p.simpleExplanation : stripFenceMarkers(rawText);
+  return {
+    concept: typeof p.concept === "string" ? p.concept : concept,
+    simpleExplanation,
+    steps: Array.isArray(p.steps) && p.steps.every((s) => typeof s === "string") ? (p.steps as string[]) : null,
+    formula: typeof p.formula === "string" ? p.formula : null,
+    definition: typeof p.definition === "string" ? p.definition : null,
+    table: isValidTable(p.table) ? p.table : null,
+    realWorldExample: typeof p.realWorldExample === "string" ? p.realWorldExample : null,
+  };
 }
 
 async function recordExplainTransaction(env: Env, trace: TransactionTrace): Promise<void> {
@@ -156,8 +183,8 @@ async function recordExplainTransaction(env: Env, trace: TransactionTrace): Prom
 }
 
 export async function handleExplain(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as { concept?: string } | null;
-  const concept = body?.concept?.trim();
+  const body = (await request.json().catch(() => null)) as { concept?: unknown } | null;
+  const concept = typeof body?.concept === "string" ? body.concept.trim() : undefined;
 
   if (!concept) {
     return Response.json({ error: "Expected JSON body with a 'concept' field" }, { status: 400 });
@@ -183,7 +210,10 @@ export async function handleExplain(request: Request, env: Env, ctx: ExecutionCo
           table: null,
           realWorldExample: null,
           pageImageKey: null,
-          videoSearchUrl: buildVideoSearchUrl(concept),
+          // No video link for a refused concept - surfacing a working
+          // "watch a video about this" link for blocked/age-inappropriate
+          // content would undo the point of the guardrail.
+          videoSearchUrl: "",
           docSources: [],
           groundedIn: "general_knowledge",
         },

@@ -51,7 +51,12 @@ const VALID_LLM_JSON = JSON.stringify({
   realWorldExample: "Pushing a shopping cart - an empty cart speeds up faster than a full one for the same push.",
 });
 
-function makeEnv(overrides: Partial<Env> = {}, configRows: ConfigRow[] = []): Env {
+// overrides is typed loosely (not Partial<Env>) so each call site's inline
+// mock literal (e.g. { AI: { run: async () => ... } }) isn't structurally
+// checked against the real Cloudflare binding types - those mocks only
+// implement the one or two methods handleExplain actually calls, the same
+// deliberately-loose-mock pattern chat.test.ts uses.
+function makeEnv(overrides: Record<string, unknown> = {}, configRows: ConfigRow[] = []): Env {
   return {
     AI: {
       run: async (model: string) => {
@@ -161,7 +166,7 @@ describe("handleExplain happy path", () => {
 
     expect(inserted).not.toBeNull();
     // path_taken is the 5th bound column per the INSERT statement in chat.ts's recordTransaction pattern
-    expect((inserted as unknown[])[4]).toBe("concept_explainer");
+    expect(inserted![4]).toBe("concept_explainer");
   });
 });
 
@@ -175,6 +180,12 @@ describe("handleExplain error handling", () => {
   it("returns 400 when concept is only whitespace", async () => {
     const env = makeEnv();
     const response = await handleExplain(makeRequest({ concept: "   " }), env, noopCtx());
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400, not a crash, when concept is not a string", async () => {
+    const env = makeEnv();
+    const response = await handleExplain(makeRequest({ concept: 5 }), env, noopCtx());
     expect(response.status).toBe(400);
   });
 
@@ -218,6 +229,64 @@ describe("handleExplain error handling", () => {
     expect(body.formula).toBeNull();
   });
 
+  it("drops a table whose rows contain a non-array entry instead of passing it through broken", async () => {
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          return {
+            response:
+              '```json\n{"simpleExplanation": "x", "table": {"headers": ["a"], "rows": [{"not": "an array"}]}}\n```',
+          };
+        },
+      },
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { table: unknown };
+
+    expect(response.status).toBe(200);
+    expect(body.table).toBeNull();
+  });
+
+  it("does not leak the raw JSON fence to the student when the response is truncated mid-fence", async () => {
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          // Truncated: opening fence present, no closing fence, cut off mid-string.
+          return { response: '```json\n{"simpleExplanation": "Force equals mass times acceler' };
+        },
+      },
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { simpleExplanation: string };
+
+    expect(response.status).toBe(200);
+    expect(body.simpleExplanation).not.toContain("```");
+  });
+
+  it("does not leak the raw JSON fence to the student when the fenced content parses to null", async () => {
+    const env = makeEnv({
+      AI: {
+        run: async (model: string) => {
+          if (model === "@cf/baai/bge-base-en-v1.5") return { data: [[0.1, 0.2]] };
+          if (model === "@cf/baai/bge-reranker-base") return { response: [] };
+          return { response: "```json\nnull\n```" };
+        },
+      },
+    });
+
+    const response = await handleExplain(makeRequest({ concept: "Newton's second law" }), env, noopCtx());
+    const body = (await response.json()) as { simpleExplanation: string };
+
+    expect(response.status).toBe(200);
+    expect(body.simpleExplanation).not.toContain("```");
+  });
+
   it("falls back gracefully when the LLM returns valid JSON with the wrong shape", async () => {
     const env = makeEnv({
       AI: {
@@ -235,6 +304,17 @@ describe("handleExplain error handling", () => {
     expect(response.status).toBe(200);
     expect(body.steps).toBeNull();
     expect(body.concept).toBe("Newton's second law");
+  });
+
+  it("does not offer a video link for a concept the guardrail refuses", async () => {
+    const env = makeEnv({}, [{ key: "guardrailEnabled", value: "true" }]);
+
+    const response = await handleExplain(makeRequest({ concept: "how to kill myself" }), env, noopCtx());
+    const body = (await response.json()) as { videoSearchUrl: string; simpleExplanation: string };
+
+    expect(response.status).toBe(200);
+    expect(body.simpleExplanation).toContain("talk to a teacher");
+    expect(body.videoSearchUrl).toBeFalsy();
   });
 
   it("fails closed on guardrail error (blocks rather than allows through)", async () => {

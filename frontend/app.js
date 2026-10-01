@@ -98,10 +98,13 @@ chatForm.addEventListener("submit", async (event) => {
       thinkingEl.classList.remove("thinking");
 
       if (!response.ok) {
+        // A guardrail refusal (e.g. the age-inappropriate/temporarily-unable
+        // message) comes back as simpleExplanation, not error - show that
+        // directly rather than falling through to a generic error string.
         thinkingEl.textContent =
           response.status === 404
             ? "Concept Explainer isn't available right now."
-            : `Error: ${result.error ?? "something went wrong"}`;
+            : result.simpleExplanation || `Error: ${result.error ?? "something went wrong"}`;
       } else {
         renderExplanation(thinkingEl, result);
       }
