@@ -362,23 +362,23 @@ async function loadSettingsTab() {
         <h2>Runtime settings</h2>
         <p class="txn-meta">Changes apply to the next question asked - Cloudflare Workers have no long-running process to restart.</p>
         <form id="settings-form" class="settings-form">
-          <label>Top K chunks retrieved
+          <label title="How many chunks are retrieved from Vectorize per question before reranking and filtering.">Top K chunks retrieved
             <input type="number" name="topK" min="1" step="1" value="${config.topK}" />
           </label>
-          <label>Confidence threshold (0-1)
+          <label title="Minimum reranker/cosine score a question's top chunk must reach to be used. 0 disables this gate - the reranker's score scale isn't guaranteed non-negative.">Confidence threshold (0-1)
             <input type="number" name="confidenceThreshold" min="0" max="1" step="0.01" value="${config.confidenceThreshold}" />
           </label>
           <fieldset>
             <legend>Web search mode</legend>
-            <label class="checkbox-row"><input type="radio" name="webSearchMode" value="rag_only" ${config.webSearchMode === "rag_only" ? "checked" : ""} /> RAG only</label>
-            <label class="checkbox-row"><input type="radio" name="webSearchMode" value="rag_web_fallback" ${config.webSearchMode === "rag_web_fallback" ? "checked" : ""} /> RAG + web fallback</label>
+            <label class="checkbox-row" title="Never fall back to a web search when no document chunks are found."><input type="radio" name="webSearchMode" value="rag_only" ${config.webSearchMode === "rag_only" ? "checked" : ""} /> RAG only</label>
+            <label class="checkbox-row" title="Fall back to a DuckDuckGo web search when no document chunks are found."><input type="radio" name="webSearchMode" value="rag_web_fallback" ${config.webSearchMode === "rag_web_fallback" ? "checked" : ""} /> RAG + web fallback</label>
           </fieldset>
-          <label class="checkbox-row"><input type="checkbox" name="hardFailNoDocument" ${config.hardFailNoDocument ? "checked" : ""} /> Hard fail when no document found</label>
-          <label class="checkbox-row"><input type="checkbox" name="jevEnabled" ${config.jevEnabled ? "checked" : ""} /> JEV relevance filtering enabled</label>
-          <label>JEV relevance threshold (0-3, lower = less strict)
+          <label class="checkbox-row" title="Refuse to answer (instead of using web results or general knowledge) when no document chunks are found."><input type="checkbox" name="hardFailNoDocument" ${config.hardFailNoDocument ? "checked" : ""} /> Hard fail when no document found</label>
+          <label class="checkbox-row" title="Use the JEV relevance/injection check to filter retrieved chunks before answering."><input type="checkbox" name="jevEnabled" ${config.jevEnabled ? "checked" : ""} /> JEV relevance filtering enabled</label>
+          <label title="Minimum JEV relevance score (0-3) a chunk must reach to be kept. Lower = less strict.">JEV relevance threshold (0-3, lower = less strict)
             <input type="number" name="jevRelevanceThreshold" min="0" max="3" step="0.1" value="${config.jevRelevanceThreshold}" />
           </label>
-          <label class="checkbox-row"><input type="checkbox" name="guardrailEnabled" ${config.guardrailEnabled ? "checked" : ""} /> Guardrail enabled</label>
+          <label class="checkbox-row" title="Block out-of-scope or age-inappropriate questions before retrieval runs."><input type="checkbox" name="guardrailEnabled" ${config.guardrailEnabled ? "checked" : ""} /> Guardrail enabled</label>
           <button type="submit">Save</button>
         </form>
         <p id="settings-status" class="txn-meta"></p>
@@ -408,6 +408,26 @@ async function loadSettingsTab() {
           <button type="submit">Save</button>
         </form>
         <p id="ingestion-status" class="txn-meta"></p>
+      </div>
+      <div class="card">
+        <h2>Concept Explainer</h2>
+        <p class="txn-meta">Controls the student-facing Concept Explainer mode on the chat page.</p>
+        <form id="explainer-form" class="settings-form">
+          <label class="checkbox-row" title="When off, the Concept Explainer endpoint returns 404 and the student-facing toggle is hidden.">
+            <input type="checkbox" name="conceptExplainerEnabled" ${config.conceptExplainerEnabled ? "checked" : ""} /> Concept Explainer enabled
+          </label>
+          <fieldset>
+            <legend>Retrieval mode</legend>
+            <label class="checkbox-row" title="Explain strictly from retrieved course material; fall back to general knowledge only when nothing relevant was retrieved.">
+              <input type="radio" name="explainRetrievalMode" value="rag_fallback" ${config.explainRetrievalMode === "rag_fallback" ? "checked" : ""} /> RAG only, fallback to general knowledge
+            </label>
+            <label class="checkbox-row" title="Always combine retrieved course material (as the primary source of truth) with general knowledge to complete the explanation. Recommended - retrieved chunks are often too fragmentary alone to fully explain a concept.">
+              <input type="radio" name="explainRetrievalMode" value="rag_plus_llm" ${config.explainRetrievalMode === "rag_plus_llm" ? "checked" : ""} /> RAG + general knowledge, consolidated
+            </label>
+          </fieldset>
+          <button type="submit">Save</button>
+        </form>
+        <p id="explainer-status" class="txn-meta"></p>
       </div>`;
 
     document.getElementById("settings-form").addEventListener("submit", async (event) => {
@@ -476,6 +496,29 @@ async function loadSettingsTab() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
         status.textContent = "Saved - applies to documents uploaded from now on.";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      }
+    });
+
+    document.getElementById("explainer-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const status = document.getElementById("explainer-status");
+      const update = {
+        conceptExplainerEnabled: form.conceptExplainerEnabled.checked,
+        explainRetrievalMode: form.explainRetrievalMode.value,
+      };
+      status.textContent = "Saving...";
+      try {
+        const response = await fetch(`${WORKER_URL}/admin/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...adminHeaders() },
+          body: JSON.stringify(update),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+        status.textContent = "Saved - takes effect on the next question.";
       } catch (err) {
         status.textContent = `Error: ${err.message}`;
       }
