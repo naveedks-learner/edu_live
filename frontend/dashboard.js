@@ -65,6 +65,10 @@ function uploadCardHtml() {
         <input type="file" id="file-input" accept="application/pdf" />
         <button id="upload-btn">Upload</button>
       </div>
+      <label class="checkbox-row upload-force-row">
+        <input type="checkbox" id="force-reingest-input" />
+        Force re-ingest (replace an already-indexed document with this filename)
+      </label>
       <p id="upload-status" class="txn-meta"></p>
     </div>`;
 }
@@ -72,6 +76,7 @@ function uploadCardHtml() {
 function wireUploadCard(onUploaded) {
   const ingestKeyInput = document.getElementById("ingest-key-input");
   const fileInput = document.getElementById("file-input");
+  const forceReingestInput = document.getElementById("force-reingest-input");
   const uploadBtn = document.getElementById("upload-btn");
   const uploadStatus = document.getElementById("upload-status");
 
@@ -91,6 +96,7 @@ function wireUploadCard(onUploaded) {
     uploadStatus.classList.remove("upload-status-success", "upload-status-error");
     const formData = new FormData();
     formData.append("file", file);
+    if (forceReingestInput.checked) formData.append("force", "true");
     const ingestKey = ingestKeyInput.value.trim();
 
     try {
@@ -100,18 +106,19 @@ function wireUploadCard(onUploaded) {
         body: formData,
       });
       const result = await response.json();
+      const succeeded = response.ok && result.status === "indexed";
 
       uploadStatus.textContent = response.ok
         ? `${result.status}: ${result.source}${result.chunkCount ? ` (${result.chunkCount} chunks)` : ""}`
         : `Error: ${result.error}`;
-      uploadStatus.classList.toggle("upload-status-success", response.ok);
+      uploadStatus.classList.toggle("upload-status-success", succeeded);
       uploadStatus.classList.toggle("upload-status-error", !response.ok);
 
       // Reloading the tab immediately would wipe this message the instant
       // it appears (the reload rebuilds this whole card, including a fresh,
       // blank status paragraph) - pausing first gives the admin a chance to
       // actually read it.
-      if (response.ok) setTimeout(onUploaded, 1800);
+      if (succeeded) setTimeout(onUploaded, 1800);
     } catch (err) {
       uploadStatus.textContent = `Error: could not reach the server (${err.message})`;
       uploadStatus.classList.add("upload-status-error");

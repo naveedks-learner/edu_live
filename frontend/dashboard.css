@@ -164,6 +164,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tab-btn:focus-
 .card h2, .card h3 { margin-top: 0; }
 
 .upload-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+.upload-force-row { display: flex; flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem; }
 .upload-row input[type="file"] { flex: 1; font-size: 0.9rem; color: var(--text); }
 .upload-row input[type="password"] {
   flex: 1;

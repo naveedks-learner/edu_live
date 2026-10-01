@@ -28,9 +28,28 @@ export async function handleIngest(request: Request, env: Env): Promise<Response
     return Response.json({ error: "Only PDF files are supported" }, { status: 400 });
   }
 
+  const force = formData.get("force") === "true";
   const existing = await env.PDF_BUCKET.head(file.name);
-  if (existing) {
+  if (existing && !force) {
     return Response.json({ status: "skipped", reason: "already indexed", source: file.name });
+  }
+
+  if (existing && force) {
+    // The old document is being replaced, not merged with - clear
+    // everything that belongs to the old version before re-indexing, or a
+    // document whose page/chunk count shrinks would leave stale vectors and
+    // page-images past the new content's range, and the old cleaned text
+    // would survive even if the new ingest doesn't produce any.
+    const oldChunkCount = Number(existing.customMetadata?.chunkCount ?? 0);
+    if (oldChunkCount > 0) {
+      const oldIds = Array.from({ length: oldChunkCount }, (_, i) => chunkVectorId(file.name, i));
+      await env.VECTORIZE.deleteByIds(oldIds);
+    }
+    const oldPageImages = await env.PDF_BUCKET.list({ prefix: `page-images/${file.name}/` });
+    if (oldPageImages.objects.length > 0) {
+      await env.PDF_BUCKET.delete(oldPageImages.objects.map((o) => o.key));
+    }
+    await env.PDF_BUCKET.delete(`cleaned/${file.name}.md`);
   }
 
   const pdfBytes = await file.arrayBuffer();

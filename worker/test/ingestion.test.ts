@@ -51,9 +51,10 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
   } as unknown as Env;
 }
 
-function makeUploadRequest(headers: Record<string, string> = {}): Request {
+function makeUploadRequest(headers: Record<string, string> = {}, { force = false } = {}): Request {
   const formData = new FormData();
   formData.append("file", new File(["not a real pdf"], "notes.pdf", { type: "application/pdf" }));
+  if (force) formData.append("force", "true");
   return new Request("https://worker.example/ingest", { method: "POST", body: formData, headers });
 }
 
@@ -111,6 +112,91 @@ describe("handleIngest metadata", () => {
     expect(options.customMetadata).toHaveProperty("pageCount");
     expect(options.customMetadata).toHaveProperty("indexedAt");
     expect(options.customMetadata.pageCount).toBe("2");
+  });
+});
+
+describe("handleIngest force re-ingest", () => {
+  it("still skips an existing document when force is not set", async () => {
+    const env = makeEnv({
+      PDF_BUCKET: { head: async () => ({ customMetadata: { chunkCount: "5" } }), put: async () => {} } as unknown as R2Bucket,
+    });
+
+    const response = await handleIngest(makeUploadRequest({ "x-ingest-key": "secret-key" }), env);
+    const body = (await response.json()) as { status: string };
+
+    expect(body.status).toBe("skipped");
+  });
+
+  it("deletes the old document's vectors (by the old chunkCount) and re-ingests when force is set", async () => {
+    const deletedIds: string[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      VECTORIZE: {
+        upsert: async () => ({}),
+        deleteByIds: async (ids: string[]) => {
+          deletedIds.push(...ids);
+        },
+      } as unknown as VectorizeIndex,
+      PDF_BUCKET: {
+        head: async () => ({ customMetadata: { chunkCount: "3" } }),
+        put: async () => {},
+        list: async () => ({ objects: [] }),
+        delete: async () => {},
+      } as unknown as R2Bucket,
+    });
+
+    const response = await handleIngest(makeUploadRequest({}, { force: true }), env);
+    const body = (await response.json()) as { status: string };
+
+    expect(body.status).toBe("indexed");
+    expect(deletedIds.length).toBe(3); // the OLD chunkCount, not the new one
+  });
+
+  it("deletes the old document's page-images/ objects when force is set", async () => {
+    const deletedKeys: string[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      VECTORIZE: { upsert: async () => ({}), deleteByIds: async () => {} } as unknown as VectorizeIndex,
+      PDF_BUCKET: {
+        head: async () => ({ customMetadata: { chunkCount: "0" } }),
+        put: async () => {},
+        list: async (options: { prefix?: string }) => {
+          expect(options.prefix).toBe("page-images/notes.pdf/");
+          return { objects: [{ key: "page-images/notes.pdf/1.png" }, { key: "page-images/notes.pdf/2.png" }] };
+        },
+        delete: async (keys: string | string[]) => {
+          deletedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
+        },
+      } as unknown as R2Bucket,
+    });
+
+    await handleIngest(makeUploadRequest({}, { force: true }), env);
+
+    expect(deletedKeys).toContain("page-images/notes.pdf/1.png");
+    expect(deletedKeys).toContain("page-images/notes.pdf/2.png");
+  });
+
+  it("deletes the old cleaned/<name>.md artifact when force is set, even if none exists", async () => {
+    const deletedKeys: string[] = [];
+    const env = makeEnv({
+      INGEST_API_KEY: "",
+      AI: { run: async () => ({ data: [[0.1, 0.2]] }) } as unknown as Ai,
+      VECTORIZE: { upsert: async () => ({}), deleteByIds: async () => {} } as unknown as VectorizeIndex,
+      PDF_BUCKET: {
+        head: async () => ({ customMetadata: { chunkCount: "0" } }),
+        put: async () => {},
+        list: async () => ({ objects: [] }),
+        delete: async (keys: string | string[]) => {
+          deletedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
+        },
+      } as unknown as R2Bucket,
+    });
+
+    await handleIngest(makeUploadRequest({}, { force: true }), env);
+
+    expect(deletedKeys).toContain("cleaned/notes.pdf.md");
   });
 });
 
